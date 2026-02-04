@@ -385,6 +385,7 @@ const ApplicationController = {
       const id = req.params.id;
       const approve = req.query.approve;
       const admin = req.user;
+      const rejectionReason = req.body.rejectionReason;
 
       const application = await Application.findById(id);
       if (!application) {
@@ -420,6 +421,7 @@ const ApplicationController = {
           applicationID: application._id,
         });
       } else {
+        if (!rejectionReason) return errorResponse(res, "rejection reason is required", 400);
         application.status = ApplicationStatus.REJECTED;
         application.pendingApprovalRejectionDate = new Date();
 
@@ -427,6 +429,7 @@ const ApplicationController = {
           email: user.email,
           name: `${user.firstName} ${user.lastName}`,
           applicationID: application._id,
+          rejectionReason: rejectionReason,
         });
       }
       await application.save();

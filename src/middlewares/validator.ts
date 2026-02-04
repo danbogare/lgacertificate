@@ -1,4 +1,4 @@
-import Joi from 'joi';
+import Joi, {CustomHelpers} from 'joi';
 import { Request, Response, NextFunction } from 'express';
 
 const validate = (schema: Joi.ObjectSchema<object>) => {
@@ -21,13 +21,42 @@ const validate = (schema: Joi.ObjectSchema<object>) => {
   };
 };
 
+const escapeHtml = (value: any) => {
+  if (typeof value !== 'string') return value;
+  
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;'
+  };
+  
+  // Regex to find any of these 5 characters and replace them using the map
+  return value.replace(/[&<>"']/g, (m) => map[m]);
+};
+
+const rejectSpecialCharacters = (value: any, helpers: CustomHelpers) => {
+  if (typeof value !== 'string') return value;
+
+  // Regex to detect: < > & " '
+  const forbiddenChars = /[&<>"']/;
+
+  if (forbiddenChars.test(value)) {
+    // This triggers a Joi error and stops the process
+    return helpers.error('any.invalid'); 
+  }
+
+  return value; // Input is clean, let it pass
+};
+
 const schemas = {
   createUserSchema: Joi.object().keys({
-    firstName: Joi.string().required(),
-    lastName: Joi.string().required(),
-    middleName: Joi.string().required(),
-    email: Joi.string().email().required(),
-    phone: Joi.string().length(11).pattern(/^\d{10,15}$/).required(), // Allow 10-15 digit phone numbers
+    firstName: Joi.string().custom(rejectSpecialCharacters).required(),
+    lastName: Joi.string().custom(rejectSpecialCharacters).required(),
+    middleName: Joi.string().custom(rejectSpecialCharacters).required(),
+    email: Joi.string().custom(escapeHtml).email().required(),
+    phone: Joi.string().length(11).pattern(/^\d{10,15}$/).required(),
     password: Joi.string().min(6).required(),
     confirmPassword: Joi.string()
         .valid(Joi.ref('password'))
@@ -38,8 +67,8 @@ const schemas = {
   }),
   
   superSignupSchema: Joi.object().keys({
-    firstName: Joi.string().required(),
-    lastName: Joi.string().required(),
+    firstName: Joi.string().custom(rejectSpecialCharacters).required(),
+    lastName: Joi.string().custom(rejectSpecialCharacters).required(),
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
     confirmPassword: Joi.string()
@@ -51,16 +80,16 @@ const schemas = {
   }),
   
   createApplicationSchema: Joi.object().keys({
-    fullNames: Joi.string().optional(),
-    fatherNames: Joi.string().optional(),
-    motherNames: Joi.string().optional(),
-    nativeTown: Joi.string().optional(),
-    nativePoliticalWard: Joi.string().optional(),
-    communityHead: Joi.string().optional(),
-    communityHeadContact: Joi.string().optional(),
-    village: Joi.string().optional(),
+    fullNames: Joi.string().custom(rejectSpecialCharacters).optional(),
+    fatherNames: Joi.string().custom(rejectSpecialCharacters).optional(),
+    motherNames: Joi.string().custom(rejectSpecialCharacters).optional(),
+    nativeTown: Joi.string().custom(rejectSpecialCharacters).optional(),
+    nativePoliticalWard: Joi.string().custom(rejectSpecialCharacters).optional(),
+    communityHead: Joi.string().custom(rejectSpecialCharacters).optional(),
+    communityHeadContact: Joi.string().custom(rejectSpecialCharacters).optional(),
+    village: Joi.string().custom(rejectSpecialCharacters).optional(),
     nin: Joi.string().length(11).pattern(/^\d{10,15}$/).optional(), // Allow 10-15 digit phone numbers
-    currentAddress: Joi.string().required(),
+    currentAddress: Joi.string().custom(escapeHtml).required(),
     lga: Joi.string().required(),
     stateOfOrigin: Joi.string().required(),
     isResidentOfOgun: Joi.boolean().optional(),
@@ -94,19 +123,23 @@ const schemas = {
   }),
 
   createAdminSchema: Joi.object().keys({
-    firstName: Joi.string().required(),
-    lastName: Joi.string().required(),
+    firstName: Joi.string().custom(rejectSpecialCharacters).required(),
+    lastName: Joi.string().custom(rejectSpecialCharacters).required(),
     email: Joi.string().email().required(),
-    position: Joi.string().required(),
-    staffID: Joi.string().required(),
+    position: Joi.string().custom(rejectSpecialCharacters).required(),
+    staffID: Joi.string().custom(rejectSpecialCharacters).required(),
     lga: Joi.string().required(),
     phone: Joi.string().pattern(/^\d{10,15}$/).required(), // Allow 10-15 digit phone numbers
   }),
   
+  rejectionReasonSchema: Joi.object().keys({
+    rejectionReason: Joi.string().min(10).custom(escapeHtml).optional(),
+  }),
+  
   createSignatorySchema: Joi.object().keys({
     lga: Joi.string().required(),
-    chairmanName: Joi.string().required(),
-    secretaryName: Joi.string().required(),  
+    chairmanName: Joi.string().custom(rejectSpecialCharacters).required(),
+    secretaryName: Joi.string().custom(rejectSpecialCharacters).required(),  
   }),
 
   changePasswordSchema: Joi.object().keys({

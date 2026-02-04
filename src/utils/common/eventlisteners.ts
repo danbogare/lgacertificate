@@ -53,11 +53,11 @@ emitter.on('application-approved', async (data: { email: string; name: string, a
   });
 });
 
-emitter.on('application-rejected', async (data: { email: string; name: string, applicationID: string }) => {
+emitter.on('application-rejected', async (data: { email: string; name: string, applicationID: string, rejectionReason: string }) => {
   await sendEmail({
     email: data.email,
     subject: 'Application Rejected',
-    message: await applicationRejectedTemp(data.name, data.applicationID),
+    message: await applicationRejectedTemp(data.name, data.applicationID, data.rejectionReason),
   });
 });
 

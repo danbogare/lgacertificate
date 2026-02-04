@@ -1,4 +1,4 @@
-export const applicationRejectedTemp = async (name: string, applicationId: string) => {
+export const applicationRejectedTemp = async (name: string, applicationId: string, rejectionReason: string) => {
   const html = `
   <!DOCTYPE html>
   <html lang="en">
@@ -98,9 +98,9 @@ export const applicationRejectedTemp = async (name: string, applicationId: strin
                               <table role="presentation" style="width: 100%; background-color: #f0f8f4; border-left: 4px solid #1a7f3e; border-radius: 4px; border-collapse: collapse; margin: 25px 0;">
                                   <tr>
                                       <td style="padding: 20px;">
-                                          <h3 style="color: #1a7f3e; font-size: 16px; margin: 0 0 10px;">📋 What Happens Next?</h3>
+                                          <h3 style="color: #1a7f3e; font-size: 16px; margin: 0 0 10px;">📋 The Reason for Rejection:</h3>
                                           <p style="color: #0d5f2e; font-size: 14px; line-height: 1.6; margin: 0;">
-                                              Our team has finished reviewing your application. You can login to your dashboard and check reason for rejection.
+                                              ${rejectionReason}
                                           </p>
                                       </td>
                                   </tr>

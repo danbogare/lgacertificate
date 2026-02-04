@@ -42,7 +42,7 @@ router.post("/admin/change-password", adminAuthMiddleware, validate(schemas.chan
 router.post("/admin/forgot-password", validate(schemas.forgotPasswordSchema), AdminController.forgotPassword);
 router.post("/admin/reset-password", validate(schemas.resetPasswordSchema), AdminController.resetPassword);
 router.post("/admin/resend-otp", validate(schemas.resetPasswordSchema), AdminController.resendOTP);
-router.post("/admin/application/:id", adminAuthMiddleware, ApplicationController. approveApplicationsByAdmin);
+router.post("/admin/application/:id", adminAuthMiddleware, validate(schemas.rejectionReasonSchema), ApplicationController.approveApplicationsByAdmin);
 router.get("/admin/applications", adminAuthMiddleware, ApplicationController.getFilteredApplications);
 router.get("/admin/applications/pending", adminAuthMiddleware, ApplicationController.getPendingApplications);
 router.get("/admin/applications/approved", adminAuthMiddleware, ApplicationController.getApprovedApplications);
