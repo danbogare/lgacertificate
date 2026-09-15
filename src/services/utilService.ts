@@ -8,7 +8,7 @@ const UtilServices = {
       const firstName = config.app.ADMIN_NAME;
       const lastName = config.app.ADMIN_NAME;
       const email = config.app.ADMIN_EMAIL;
-      const password = config.app.ADMIN_PASS;
+      const password = config.app.ADMIN_PASS;      
 
       if (!email || !password) return;
 
