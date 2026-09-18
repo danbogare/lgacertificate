@@ -106,7 +106,6 @@ const ApplicationController = {
         }
       }
 
-
       const existingApplication = await Application.findOne({ nin, isPending: true });
       if (existingApplication) {
         await session.abortTransaction();
@@ -114,16 +113,15 @@ const ApplicationController = {
       }
 
       // ✅ Upload files to Cloudinary
-    const [passportData, docData] = await Promise.all([
-      uploadToCloudinary(passportFile.buffer, "applications", "image"),
-      docFile ? uploadToCloudinary(docFile.buffer, "applications", "raw") : Promise.resolve(null),
-    ]);
+      const [passportData, docData] = await Promise.all([
+        uploadToCloudinary(passportFile.buffer, "applications", "image"),
+        docFile ? uploadToCloudinary(docFile.buffer, "applications", "raw") : Promise.resolve(null),
+      ]);
 
       const transactionRef = generateTransactionRef();
-
       const paymentPayload = {
         tx_ref: transactionRef,
-        amount: '10000',
+        amount: config.app.APPLICATION_AMOUNT.toString(),
         currency: 'NGN',
         redirect_url: `${config.app.URL}/api/v1/application/payment/verify`,
         customer: {
@@ -178,7 +176,7 @@ const ApplicationController = {
 
       const transaction = new Transaction({
         transactionRef,
-        amount: '10000',
+        amount: config.app.APPLICATION_AMOUNT.toString(),
         transactionType: TransactionType.APPLICATION,
         user: user._id,
         application: application._id,

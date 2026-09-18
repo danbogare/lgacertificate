@@ -39,7 +39,7 @@ const CertificateController = {
 
       const paymentPayload = {
         tx_ref: transactionRef,
-        amount: '500',
+        amount: config.app.CERTIFICATE_AMOUNT.toString(),
         currency: 'NGN',
         redirect_url: `${config.app.URL}/api/v1/certificate/payment/verify`,
         customer: {
@@ -73,7 +73,7 @@ const CertificateController = {
 
       const transaction = new Transaction({
         transactionRef,
-        amount: '10000',
+        amount: config.app.CERTIFICATE_AMOUNT.toString(),
         transactionType: TransactionType.CERTIFICATE,
         user: user._id,
         certificate: certificate._id,
