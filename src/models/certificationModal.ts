@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 
 export interface ICertificate extends Document {
   certificateRef: string;
+  certificateHash: string;
   verificationCode?: string | null | undefined;
   emailOfVerification?: string | null | undefined;
   isVerificationCodeGenerated?: boolean;
@@ -14,6 +15,7 @@ export interface ICertificate extends Document {
 const certificateSchema = new Schema<ICertificate>(
   {
     certificateRef: { type: String, required: true },
+    certificateHash: { type: String, required: true },
     verificationCode: { type: String },
     emailOfVerification: { type: String },
     isVerificationCodeGenerated: { type: Boolean, default: false },

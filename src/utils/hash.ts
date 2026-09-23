@@ -1,4 +1,6 @@
 import { hash as bcryptHash, compare as bcryptCompare, genSalt as bcryptGenSalt } from 'bcryptjs';
+import crypto from 'crypto';
+import { config } from '../config/app';
 
 export const hash = async (value: string): Promise<string> => {
     const salt = await bcryptGenSalt(10);
@@ -65,3 +67,19 @@ export function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
+
+export const generateCertificateHash = (payload: {
+  certificateRef: string;
+  applicationId: string;
+  userId: string;
+}): string => {
+  const data = `${payload.certificateRef}|${payload.applicationId}|${payload.userId}`;
+  const secret = config.app.CERTIFICATE_SECRET ?? "";
+  if (secret === "") {
+    throw new Error("Certificate secret is not set");
+  }
+  return crypto
+    .createHmac("sha256", secret)
+    .update(data)
+    .digest("hex");
+};

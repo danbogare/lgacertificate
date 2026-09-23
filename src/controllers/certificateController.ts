@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { errorResponse, successResponse } from '../utils/responseUtils';
 import Certificate from '../models/certificationModal';
-import { generateRandomString, generateTransactionRef } from '../utils/hash';
+import { generateCertificateHash, generateRandomString, generateTransactionRef } from '../utils/hash';
 import { config } from '../config/app';
 import { IBaseResponse } from '../utils/apiCalls/IResponse';
 import { restClientWithHeaders } from '../utils/apiCalls/restcall';
@@ -212,7 +212,13 @@ const CertificateController = {
   getCertificates: async (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user;
-      const certificates = await Certificate.find({ user: user._id });
+      const certificates = await Certificate.find({ user: user._id })
+        .populate({
+          path: "application",
+          select: "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+        })
+        .sort({ createdAt: -1 })
+        .lean();
       return successResponse(res, 'Certificates retrieved successfully', { certificates });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
@@ -233,6 +239,39 @@ const CertificateController = {
       await certificate.save();
 
       return successResponse(res, 'Verification Code nullified successfully', {});
+    } catch (err: any) {
+      return errorResponse(res, err.message, 500);
+    }
+  },
+
+  verifyCertificateHash: async (req: Request, res: Response) => {
+    try {
+      const { hash } = req.params;
+
+      const certificate = await Certificate.findOne({ verificationHash: hash })
+        .populate("application")
+        .populate("user");
+
+      if (!certificate) {
+        return errorResponse(res, "Certificate not found or invalid", 404);
+      }
+
+      // Optional belt-and-suspenders: recompute and compare
+      const expected = generateCertificateHash({
+        certificateRef: certificate.certificateRef,
+        applicationId: certificate.application._id.toString(),
+        userId: certificate.user._id.toString(),
+      });
+
+      if (expected !== hash) {
+        return successResponse(res, "Certificate not found or invalid", {
+          certificateValid: false,
+        });
+      }
+
+      return successResponse(res, "Certificate verified", {
+        certificateValid: true,
+      });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
     }

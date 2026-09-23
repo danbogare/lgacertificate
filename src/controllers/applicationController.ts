@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { errorResponse, successResponse } from '../utils/responseUtils';
 import Application, { ApplicationStatus, IApplication } from '../models/applicationModel';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
-import { formatDateTimeForFilename, generateTransactionRef, isValidDateFormat, isValidEmail } from '../utils/hash';
+import { formatDateTimeForFilename, generateCertificateHash, generateTransactionRef, isValidDateFormat, isValidEmail } from '../utils/hash';
 import { restClientWithHeaders } from '../utils/apiCalls/restcall';
 import { IBaseResponse } from '../utils/apiCalls/IResponse';
 import { config } from '../config/app';
@@ -422,9 +422,15 @@ const ApplicationController = {
         application.pendingApprovalRejectionDate = new Date();
 
         const certificateRef = await CertificateService.certificateReference();
+        const certificateHash = generateCertificateHash({
+          certificateRef,
+          applicationId: String(application._id),
+          userId: application.user.toString(),
+        });
 
         await Certificate.create({
           certificateRef,
+          certificateHash,
           application: application._id,
           user: application.user,
         });

@@ -14,6 +14,8 @@ export const config = {
         FRONT_END_URL: process.env.FRONT_END_URL,
         APPLICATION_AMOUNT: 10000,
         CERTIFICATE_AMOUNT: 500,
+        CERTIFICATE_SECRET: process.env.CERTIFICATE_SECRET,
+        CERTIFICATE_HASH_ENABLED: true,
         ADMIN_EMAIL: process.env.APP_ADMIN_EMAIL,
         ADMIN_PASS: process.env.APP_ADMIN_PASSWORD,
         ADMIN_NAME: process.env.APP_ADMIN_NAME,

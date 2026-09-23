@@ -54,6 +54,7 @@ router.post("/admin/download/application", adminAuthMiddleware, ApplicationContr
 router.post("/certificate/request-verification/:id", authMiddleware, validate(schemas.forgotPasswordSchema), CertificateController.requestVerificationCode);
 router.get("/certificate/payment/verify", CertificateController.verifyCertificateVerificationCodePayment);
 router.get("/certificate/verify/:ref", CertificateController.confirmVerificationCode);
+router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
 router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
 
