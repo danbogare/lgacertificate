@@ -43,6 +43,7 @@ const ApplicationController = {
         stateOfOrigin,
         isResidentOfOgun,
         lgaOfResident,
+        dateOfBirth,
       } = req.body;
 
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -53,22 +54,36 @@ const ApplicationController = {
         return errorResponse(res, "Passport is required", 400);
       }
 
-      // ✅ Validate passport file is an image
+      // Validate passport file is an image
       if (!["image/jpeg", "image/png", "image/jpg"].includes(passportFile.mimetype)) {
         return errorResponse(res, "Passport must be a JPG or PNG image", 400);
       }
 
-      // ✅ Validate document file is a PDF (if provided)
+      // Validate document file is a PDF (if provided)
       if (docFile && docFile.mimetype !== "application/pdf") {
         return errorResponse(res, "Community head document must be a PDF file", 400);
       }
 
-      // 1️⃣ Validate state
+      let parsedDateOfBirth: Date | null = null;
+      if (dateOfBirth) {
+        const d = new Date(dateOfBirth);
+        if (isNaN(d.getTime())) {
+          return errorResponse(res, "Invalid date of birth", 400);
+        }
+        if (d > new Date()) {
+          return errorResponse(res, "Date of birth cannot be in the future", 400);
+        }
+        parsedDateOfBirth = d;
+      } else {
+        return errorResponse(res, "Date of birth is required", 400);
+      }
+
+      // 1️ Validate state
       if (!Object.keys(statesData).includes(stateOfOrigin)) {
         return errorResponse(res, "Invalid state of origin", 400);
       }
 
-      // 2️⃣ Validate LGA within the selected state
+      // 2 Validate LGA within the selected state
       const validLgas = statesData[stateOfOrigin as keyof typeof statesData];
       if (!validLgas.includes(lga)) {
         return errorResponse(res, "Invalid LGA for the selected state", 400);
@@ -150,6 +165,7 @@ const ApplicationController = {
 
       const application: IApplication = new Application({
         fullNames,
+        dateOfBirth: parsedDateOfBirth,
         fatherNames: stateOfOrigin === "Ogun" ? fatherNames : null,
         motherNames: stateOfOrigin === "Ogun" ? motherNames : null,
         nativeTown: stateOfOrigin === "Ogun" ? nativeTown : null,

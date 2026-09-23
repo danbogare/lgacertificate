@@ -9,6 +9,7 @@ export enum ApplicationStatus {
 
 export interface IApplication extends Document {
   fullNames: string;
+  dateOfBirth: Date;
   nin?: string;
   fatherNames?: string;
   motherNames?: string;
@@ -37,6 +38,7 @@ export interface IApplication extends Document {
 const applicationSchema = new Schema<IApplication>(
   {
     fullNames: { type: String, required: true },
+    dateOfBirth: { type: Date, required: true },
     nin: { type: String },
     fatherNames: { type: String },
     motherNames: { type: String },
