@@ -55,6 +55,7 @@ router.post("/certificate/request-verification/:id", authMiddleware, validate(sc
 router.get("/certificate/payment/verify", CertificateController.verifyCertificateVerificationCodePayment);
 router.get("/certificate/verify/:ref", CertificateController.confirmVerificationCode);
 router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
+router.get("/certificate/:applicationId", CertificateController.verifyCertificateHash);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
 router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
 

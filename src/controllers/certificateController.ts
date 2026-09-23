@@ -224,6 +224,33 @@ const CertificateController = {
       return errorResponse(res, err.message, 500);
     }
   },
+  
+  getCertificatesByApplicationId: async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const user = req.user;
+      const { applicationId } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(applicationId)) {
+        return errorResponse(res, "Invalid application id", 400);
+      }
+      const certificate = await Certificate.findOne({
+        application: applicationId,
+        user: user._id,           // ensures it belongs to the logged-in user
+      })
+        .populate({
+          path: "application",
+          select: "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+        })
+        .lean();
+
+      if (!certificate) {
+        return errorResponse(res, 'Certificate not found', 404);
+      }
+      return successResponse(res, 'Certificates retrieved successfully', { certificate });
+    } catch (err: any) {
+      return errorResponse(res, err.message, 500);
+    }
+  },
 
   nullifyVerificationCode: async (req: Request, res: Response) => {
     try {
