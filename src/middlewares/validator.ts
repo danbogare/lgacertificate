@@ -82,6 +82,7 @@ const schemas = {
   createApplicationSchema: Joi.object().keys({
     fullNames: Joi.string().custom(rejectSpecialCharacters).optional(),
     fatherNames: Joi.string().custom(rejectSpecialCharacters).optional(),
+    dateOfBirth: Joi.string().custom(rejectSpecialCharacters).required(),
     motherNames: Joi.string().custom(rejectSpecialCharacters).optional(),
     nativeTown: Joi.string().custom(rejectSpecialCharacters).optional(),
     nativePoliticalWard: Joi.string().custom(rejectSpecialCharacters).optional(),
