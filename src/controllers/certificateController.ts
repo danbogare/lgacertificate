@@ -275,7 +275,7 @@ const CertificateController = {
     try {
       const { hash } = req.params;
 
-      const certificate = await Certificate.findOne({ verificationHash: hash })
+      const certificate = await Certificate.findOne({ certificateHash: hash })
         .populate("application")
         .populate("user");
 

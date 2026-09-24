@@ -417,12 +417,14 @@ const ApplicationController = {
       const user = await User.findById(application.user);
       if (!user) return errorResponse(res, 'user not found', 400);
 
+      let certificateHash;
+
       if (approve === 'true') {
         application.status = ApplicationStatus.APPROVED;
         application.pendingApprovalRejectionDate = new Date();
 
         const certificateRef = await CertificateService.certificateReference();
-        const certificateHash = generateCertificateHash({
+        certificateHash = generateCertificateHash({
           certificateRef,
           applicationId: String(application._id),
           userId: application.user.toString(),
@@ -454,7 +456,7 @@ const ApplicationController = {
       }
       await application.save();
 
-      return successResponse(res, 'application approved successfully', { application });
+      return successResponse(res, 'application approved successfully', { certificateHash, application });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
     }
