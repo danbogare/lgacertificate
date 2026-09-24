@@ -225,7 +225,7 @@ const CertificateController = {
     }
   },
   
-  getCertificatesByApplicationId: async (req: AuthenticatedRequest, res: Response) => {
+  getCertificateByApplicationId: async (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user;
       const { applicationId } = req.params;
