@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { schemas, validate } from "./middlewares/validator";
 import AuthController from "./controllers/authController";
 import ApplicationController from "./controllers/applicationController";
@@ -8,6 +8,9 @@ import CertificateController from "./controllers/certificateController";
 import UtilController from "./controllers/utilController";
 import SignatoryController from "./controllers/signatoryController";
 import upload from "./utils/multer";
+import { webhookSignatureGuard } from "./middlewares/webhookMiddleware";
+import { rawBodySaver } from "./middlewares/raw-body.middleware";
+import WebhookController from "./controllers/webhookController";
 
 const router = Router();
 
@@ -29,6 +32,16 @@ router.post("/application",
     ]), 
     validate(schemas.createApplicationSchema),
     ApplicationController.createApplication
+);
+
+router.post("/application/partner", 
+    authMiddleware, 
+    upload.fields([
+        { name: "passport", maxCount: 1 },
+        { name: "docFromCommunityHead", maxCount: 1 },
+    ]), 
+    validate(schemas.createApplicationSchema),
+    ApplicationController.createPartnerApplication
 );
 router.get("/application", authMiddleware, ApplicationController.getUserApplications);
 router.get("/application/payment/verify", ApplicationController.verifyPayment);
@@ -52,6 +65,7 @@ router.post("/admin/download/application", adminAuthMiddleware, ApplicationContr
 
 // Certificate Routers
 router.post("/certificate/request-verification/:id", authMiddleware, validate(schemas.forgotPasswordSchema), CertificateController.requestVerificationCode);
+router.post("/certificate/partner/request-verification/:id", authMiddleware, validate(schemas.forgotPasswordSchema), CertificateController.partnerRequestVerificationCode);
 router.get("/certificate/payment/verify", CertificateController.verifyCertificateVerificationCodePayment);
 router.get("/certificate/verify/:ref", CertificateController.confirmVerificationCode);
 router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
@@ -84,6 +98,15 @@ router.put("/signatory",
     validate(schemas.createSignatorySchema), 
     SignatoryController.updateSignatory);
 router.delete("/signatory/:lga", adminAuthMiddleware, SignatoryController.deleteSignatory);
+
+// webhook Routers
+router.post(
+    '/partner/webhook',
+    express.json({ verify: rawBodySaver }),
+    webhookSignatureGuard,
+    WebhookController.handlePartnerEvent
+);
+
 
 
 export default router;

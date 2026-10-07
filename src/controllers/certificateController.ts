@@ -15,6 +15,7 @@ import Transaction, {
 import Application from '../models/applicationModel';
 import User from '../models/userModel';
 import emitter from '../utils/common/eventlisteners';
+import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTTransactionModel';
 
 const CertificateController = {
   requestVerificationCode: async (req: AuthenticatedRequest, res: Response) => {
@@ -84,6 +85,84 @@ const CertificateController = {
       return successResponse(res, 'redirect to payment link', {
         txRef: transactionRef,
         paymentLink: response?.data?.link,
+      });
+    } catch (err: any) {
+      await session.abortTransaction();
+      return errorResponse(res, err.message, 500);
+    } finally {
+      session.endSession();
+    }
+  },
+  
+  partnerRequestVerificationCode: async (req: AuthenticatedRequest, res: Response) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const user = req.user;
+      const applicationId = req.params.id;
+      const {email} = req.body
+
+      const certificate = await Certificate.findOne({ user: user._id, application: applicationId });
+      if (!certificate) {
+        await session.abortTransaction();
+        return errorResponse(res, 'No certificate found for user', 404);
+      }
+      if (certificate.isVerificationCodeGenerated) {
+        await session.abortTransaction();
+        return errorResponse(res, 'Verification code already generated', 400);
+      }
+
+      const application = await Application.findById(applicationId);
+      if (!application) {
+        await session.abortTransaction();
+        return errorResponse(res, 'No application found for user', 404);
+      }
+
+      const transactionRef = generateTransactionRef();
+
+      const paymentPayload = {
+        firstName: application.fullNames,
+        lastName: transactionRef,
+        amount: config.app.CERTIFICATE_AMOUNT.toString(),
+      };
+
+      const response: IBaseResponse = await restClientWithHeaders(
+        'POST',
+        `${config.payments.PARTNER_BASE_URL}partners/dynamic/account`,
+        paymentPayload,
+        {
+          "x-api-key": `${config.payments.PARTNER_API_KEY}`,
+          "merchant-id": `${config.payments.PARTNER_MERCHANT_ID}`,
+        }
+      );
+
+      if (!response.success) {
+        await session.abortTransaction();
+        console.log(response);
+        return errorResponse(res, 'an error has occurred', 500);
+      }
+
+      certificate.isVerificationPaymentPending = true;
+      certificate.pendingPaymentLink = null;
+      certificate.emailOfVerification = email;
+      await certificate.save();
+
+      const partnerTransaction = new PartnerTransaction({
+        payerId: user._id,
+        paymentRef: response?.data?.result?.beneficiaryAccountName,
+        amount: config.app.CERTIFICATE_AMOUNT.toString(),
+        transactionType: TransactionType.CERTIFICATE,
+        type: PaymentType.CAPTURE,
+        certificateId: certificate._id,
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.BANK_TRANSFER,
+      });
+      await partnerTransaction.save({ session });
+      await session.commitTransaction();      
+
+      return successResponse(res, 'Dynamic partner account created successfully.', {
+        certificateId: certificate._id,
+        paymentData: response?.data?.result,
       });
     } catch (err: any) {
       await session.abortTransaction();

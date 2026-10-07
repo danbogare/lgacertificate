@@ -35,6 +35,12 @@ export const config = {
     payments: {
         URI: process.env.FLW_URI,
         SECRET: process.env.FLW_SECRET,
-        KEY: process.env.FLW_KEY
+        KEY: process.env.FLW_KEY,
+        PARTNER_API_KEY: process.env.PARTNER_API_KEY,
+        PARTNER_API_SECRET: process.env.PARTNER_API_SECRET,
+        PARTNER_EMAIL: process.env.PARTNER_EMAIL,
+        PARTNER_NAME: process.env.PARTNER_NAME,
+        PARTNER_MERCHANT_ID: process.env.PARTNER_MERCHANT_ID,
+        PARTNER_BASE_URL: process.env.PARTNER_BASE_URL,
     }
 }

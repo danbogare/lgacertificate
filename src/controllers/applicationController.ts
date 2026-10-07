@@ -21,6 +21,7 @@ import User from '../models/userModel';
 import statesData from '../services/states.json';
 import { AdminRole } from '../models/adminModel';
 import { PipelineStage, FilterQuery } from "mongoose";
+import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTTransactionModel';
 
 const ApplicationController = {
   createApplication: async (req: AuthenticatedRequest, res: Response) => {
@@ -203,6 +204,203 @@ const ApplicationController = {
       return successResponse(res, 'redirect to payment link', {
         txRef: transactionRef,
         paymentLink: response?.data?.link,
+      });
+    } catch (err: any) {
+      await session.abortTransaction();
+      if (err instanceof AppError) {
+        return res.status(err.statusCode).json({ message: err.message });
+      }
+      return errorResponse(res, err.message, 500);
+    } finally {
+      session.endSession();
+    }
+  },
+  
+  createPartnerApplication: async (req: AuthenticatedRequest, res: Response) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const user = req.user;
+      const {
+        fullNames,
+        fatherNames,
+        motherNames,
+        nativeTown,
+        nativePoliticalWard,
+        village,
+        communityHead,
+        communityHeadContact,
+        currentAddress,
+        lga,
+        nin,
+        stateOfOrigin,
+        isResidentOfOgun,
+        lgaOfResident,
+        dateOfBirth,
+      } = req.body;
+
+      const parts = fullNames.trim().split(/\s+/);
+
+      const firstName = parts[0] || "";
+      const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+
+      if (!firstName || !lastName || firstName === "" || lastName === "") {
+        return errorResponse(res, "Invalid full names", 400);
+      }
+
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const passportFile = files["passport"]?.[0];
+      const docFile = files["docFromCommunityHead"]?.[0];
+
+      if (!passportFile) {
+        return errorResponse(res, "Passport is required", 400);
+      }
+
+      // Validate passport file is an image
+      if (!["image/jpeg", "image/png", "image/jpg"].includes(passportFile.mimetype)) {
+        return errorResponse(res, "Passport must be a JPG or PNG image", 400);
+      }
+
+      // Validate document file is a PDF (if provided)
+      if (docFile && docFile.mimetype !== "application/pdf") {
+        return errorResponse(res, "Community head document must be a PDF file", 400);
+      }
+
+      let parsedDateOfBirth: Date | null = null;
+      if (dateOfBirth) {
+        const d = new Date(dateOfBirth);
+        if (isNaN(d.getTime())) {
+          return errorResponse(res, "Invalid date of birth", 400);
+        }
+        if (d > new Date()) {
+          return errorResponse(res, "Date of birth cannot be in the future", 400);
+        }
+        parsedDateOfBirth = d;
+      } else {
+        return errorResponse(res, "Date of birth is required", 400);
+      }
+
+      // 1️ Validate state
+      if (!Object.keys(statesData).includes(stateOfOrigin)) {
+        return errorResponse(res, "Invalid state of origin", 400);
+      }
+
+      // 2 Validate LGA within the selected state
+      const validLgas = statesData[stateOfOrigin as keyof typeof statesData];
+      if (!validLgas.includes(lga)) {
+        return errorResponse(res, "Invalid LGA for the selected state", 400);
+      }
+
+      const isResidentOfOgunBool = isResidentOfOgun === "true" || isResidentOfOgun === true;
+      if (stateOfOrigin !== "Ogun" && !isResidentOfOgunBool) {
+        return errorResponse(res, "Must be a resident of Ogun State if not from Ogun State", 400);
+      }
+      if (stateOfOrigin !== "Ogun" && !lgaOfResident) {
+        return errorResponse(res, "Must enter a LGA of residence of Ogun State if not from Ogun State", 400);
+      }
+      if (stateOfOrigin !== "Ogun" && lgaOfResident) {
+        const validLgasOfResident = statesData["Ogun" as keyof typeof statesData];
+         if (!validLgasOfResident.includes(lgaOfResident)) {
+            return errorResponse(res, "Invalid LGA of Residence for Ogun state", 400);
+        }
+      }
+
+      if (stateOfOrigin === "Ogun") {
+        const requiredFields = {
+          fatherNames,
+          motherNames,
+          nativeTown,
+          nativePoliticalWard,
+          village,
+          communityHead,
+          communityHeadContact,
+        };
+
+        const missing = Object.entries(requiredFields).filter(([_, value]) => !value || !value.toString().trim());
+
+        if (missing.length > 0) {
+          return errorResponse(res, "All fields relating to Ogun State origin are required", 400);
+        }
+      }
+
+      const existingApplication = await Application.findOne({ nin, isPending: true });
+      if (existingApplication) {
+        await session.abortTransaction();
+        return errorResponse(res, 'Existing application pending', 400);
+      }
+
+      // ✅ Upload files to Cloudinary
+      const [passportData, docData] = await Promise.all([
+        uploadToCloudinary(passportFile.buffer, "applications", "image"),
+        docFile ? uploadToCloudinary(docFile.buffer, "applications", "raw") : Promise.resolve(null),
+      ]);
+
+      const transactionRef = generateTransactionRef();
+      const paymentPayload = {
+        firstName: fullNames,
+        lastName: transactionRef,
+        amount: config.app.APPLICATION_AMOUNT.toString(),
+      };
+
+      const response: IBaseResponse = await restClientWithHeaders(
+        'POST',
+        `${config.payments.PARTNER_BASE_URL}partners/dynamic/account`,
+        paymentPayload,
+        {
+          "x-api-key": `${config.payments.PARTNER_API_KEY}`,
+          "merchant-id": `${config.payments.PARTNER_MERCHANT_ID}`,
+        }
+      );
+
+      if (!response.success) {
+        await session.abortTransaction();
+        console.log(response);
+        return errorResponse(res, 'an error has occurred', 500);
+      }
+
+      const application: IApplication = new Application({
+        fullNames,
+        dateOfBirth: parsedDateOfBirth,
+        fatherNames: stateOfOrigin === "Ogun" ? fatherNames : null,
+        motherNames: stateOfOrigin === "Ogun" ? motherNames : null,
+        nativeTown: stateOfOrigin === "Ogun" ? nativeTown : null,
+        nativePoliticalWard: stateOfOrigin === "Ogun" ? nativePoliticalWard : null,
+        village: stateOfOrigin === "Ogun" ? village : null,
+        communityHead: stateOfOrigin === "Ogun" ? communityHead : null,
+        communityHeadContact: stateOfOrigin === "Ogun" ? communityHeadContact : null,
+        currentAddress,
+        lga,
+        stateOfOrigin,
+        nin,
+        passport: passportData.secureUrl,
+        passportPublicId: passportData.publicId, 
+        docFromCommunityHead: docData?.secureUrl || null,
+        docFromCommunityHeadPublicId: docData?.publicId || null,
+        status: ApplicationStatus.PENDING_PAYMENT,
+        user: user._id,
+        pendingPaymentLink: null,
+        isResidentOfOgun: isResidentOfOgunBool || null,
+        lgaOfResident: stateOfOrigin !== "Ogun" ? lgaOfResident : null,
+      });
+
+      await application.save({ session });
+
+      const partnerTransaction = new PartnerTransaction({
+        payerId: user._id,
+        paymentRef: response?.data?.result?.beneficiaryAccountName,
+        amount: config.app.APPLICATION_AMOUNT.toString(),
+        transactionType: TransactionType.APPLICATION,
+        type: PaymentType.CAPTURE,
+        applicationId: application._id,
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.BANK_TRANSFER,
+      });
+      await partnerTransaction.save({ session });
+      await session.commitTransaction();      
+
+      return successResponse(res, 'Dynamic partner account created successfully.', {
+        applicationId: application._id,
+        paymentData: response?.data?.result,
       });
     } catch (err: any) {
       await session.abortTransaction();
