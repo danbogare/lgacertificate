@@ -1,6 +1,6 @@
 import Application, { ApplicationStatus } from "../models/applicationModel";
 import Certificate from "../models/certificationModal";
-import PartnerTransaction, { PaymentStatus } from "../models/partnerTTransactionModel";
+import PartnerTransaction, { PaymentStatus } from "../models/partnerTransactionModel";
 import { TransactionType } from "../models/transactionModel";
 import { generateRandomString } from "../utils/hash";
 

@@ -21,7 +21,7 @@ import User from '../models/userModel';
 import statesData from '../services/states.json';
 import { AdminRole } from '../models/adminModel';
 import { PipelineStage, FilterQuery } from "mongoose";
-import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTTransactionModel';
+import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTransactionModel';
 
 const ApplicationController = {
   createApplication: async (req: AuthenticatedRequest, res: Response) => {

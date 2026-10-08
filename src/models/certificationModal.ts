@@ -7,7 +7,11 @@ export interface ICertificate extends Document {
   emailOfVerification?: string | null | undefined;
   isVerificationCodeGenerated?: boolean;
   isVerificationPaymentPending?: boolean;
-  pendingPaymentLink: string | null;
+  pendingPaymentLink?: string | null;
+  isRevoked: boolean;
+  revocationReason?: string | null;
+  revokedBy?: Types.ObjectId | null; // reference to User model
+  revokedAt?: Date | null;
   user: Types.ObjectId; // reference to User model
   application: Types.ObjectId; // reference to Application model
 }
@@ -18,6 +22,10 @@ const certificateSchema = new Schema<ICertificate>(
     certificateHash: { type: String, required: true },
     verificationCode: { type: String },
     emailOfVerification: { type: String },
+    isRevoked: { type: Boolean, default: false },
+    revocationReason: { type: String },
+    revokedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    revokedAt: { type: Date },
     isVerificationCodeGenerated: { type: Boolean, default: false },
     isVerificationPaymentPending: { type: Boolean, default: false },
     pendingPaymentLink: { type: String },

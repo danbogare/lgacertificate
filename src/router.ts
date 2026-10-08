@@ -11,6 +11,7 @@ import upload from "./utils/multer";
 import { webhookSignatureGuard } from "./middlewares/webhookMiddleware";
 import { rawBodySaver } from "./middlewares/raw-body.middleware";
 import WebhookController from "./controllers/webhookController";
+import PartnerController from "./controllers/partnerController";
 
 const router = Router();
 
@@ -72,6 +73,7 @@ router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertifi
 router.get("/certificate/:applicationId", authMiddleware, CertificateController.getCertificateByApplicationId);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
 router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
+router.put("/certificate/revoke/:id", adminAuthMiddleware, validate(schemas.revocationReasonSchema), CertificateController.revokeCertificate);
 
 // Util Routers
 // GET states and LGAs
@@ -105,6 +107,13 @@ router.post(
     express.json({ verify: rawBodySaver }),
     webhookSignatureGuard,
     WebhookController.handlePartnerEvent
+);
+
+// confirmation of partner transaction
+router.post(
+    '/partner/transaction/:sourceId?source=:source',
+    authMiddleware,
+    PartnerController.getPartnerTransaction
 );
 
 

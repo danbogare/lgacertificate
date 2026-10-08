@@ -137,6 +137,10 @@ const schemas = {
     rejectionReason: Joi.string().min(10).custom(escapeHtml).optional(),
   }),
   
+  revocationReasonSchema: Joi.object().keys({
+    revocationReason: Joi.string().min(10).custom(escapeHtml).optional(),
+  }),
+  
   createSignatorySchema: Joi.object().keys({
     lga: Joi.string().required(),
     chairmanName: Joi.string().custom(rejectSpecialCharacters).required(),

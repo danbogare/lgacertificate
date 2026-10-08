@@ -12,10 +12,10 @@ import Transaction, {
   TransactionStatus,
   TransactionType,
 } from '../models/transactionModel';
-import Application from '../models/applicationModel';
+import Application, { IApplication } from '../models/applicationModel';
 import User from '../models/userModel';
 import emitter from '../utils/common/eventlisteners';
-import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTTransactionModel';
+import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTransactionModel';
 
 const CertificateController = {
   requestVerificationCode: async (req: AuthenticatedRequest, res: Response) => {
@@ -380,6 +380,53 @@ const CertificateController = {
       });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
+    }
+  },
+  
+  revokeCertificate: async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const admin = req.user;
+      const { revocationReason } = req.body;
+
+      if (!admin?.lga) {
+        return errorResponse(res, "Official LGA not set", 403);
+      }
+      if (!mongoose.isValidObjectId(id)) {
+        return errorResponse(res, "Invalid certificate id", 400);
+      }
+
+      const certificate = await Certificate.findById(id)
+        .populate<{ application: IApplication }>("application");
+      if (!certificate) {
+        return errorResponse(res, "Certificate not found or invalid", 404);
+      }
+      if (!certificate.application) {
+        return errorResponse(res, "Certificate has no associated application", 404);
+      }
+      if (certificate.isRevoked) {
+        return errorResponse(res, "Certificate already revoked", 409);
+      }
+
+      const { lga, lgaOfResident } = certificate.application;
+      if (admin.lga !== lga && admin.lga !== lgaOfResident) {
+        return errorResponse(res, "Officials can only revoke certificates relating to their LGA", 403);
+      }
+
+      certificate.isRevoked = true;
+      certificate.revocationReason = revocationReason;
+      certificate.revokedBy = admin._id;
+      certificate.revokedAt = new Date();
+      certificate.verificationCode = null;
+      await certificate.save();
+
+      return successResponse(res, "Certificate revoked", {
+        certificateValid: false,
+        isRevoked: true,
+      });
+    } catch (err) {
+      console.error("revokeCertificate error:", err);
+      return errorResponse(res, "Internal server error", 500);
     }
   },
 
