@@ -17,7 +17,6 @@ export const authMiddleware = async (req: AuthenticatedRequest, res: Response, n
 
         // Verify the token
         const decoded = verifyToken(token);
-        
         // get user
         const user = await User.findById((decoded as any).id);
         if (!user) return errorResponse(res, "Unauthorized", 401);

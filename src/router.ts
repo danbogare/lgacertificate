@@ -72,6 +72,7 @@ router.get("/certificate/verify/:ref", CertificateController.confirmVerification
 router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
 router.get("/certificate/:applicationId", authMiddleware, CertificateController.getCertificateByApplicationId);
 router.get("/certificate/:id", authMiddleware, CertificateController.getCertificateById);
+router.get("/certificate/admin/:id", adminAuthMiddleware, CertificateController.getCertificateById);
 router.get("/certificates/admin", adminAuthMiddleware, CertificateController.getCertificatesByAdmin);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
 router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
