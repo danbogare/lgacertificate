@@ -24,7 +24,7 @@ const certificateSchema = new Schema<ICertificate>(
     emailOfVerification: { type: String },
     isRevoked: { type: Boolean, default: false },
     revocationReason: { type: String },
-    revokedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    revokedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
     revokedAt: { type: Date },
     isVerificationCodeGenerated: { type: Boolean, default: false },
     isVerificationPaymentPending: { type: Boolean, default: false },
@@ -42,6 +42,15 @@ const certificateSchema = new Schema<ICertificate>(
   },
   { timestamps: true }
 );
+
+// Used by the $in lookup in getCertificatesByAdmin and getCertificateByApplicationId
+certificateSchema.index({ application: 1 });
+
+// getCertificates (user's own list, sorted newest first)
+certificateSchema.index({ user: 1, createdAt: -1 });
+
+// getCertificatesByAdmin (admin's filtered list, sorted newest first)
+certificateSchema.index({ revokedBy: 1, revokedAt: -1 });
 
 const Certificate = mongoose.model<ICertificate>("Certificate", certificateSchema);
 export default Certificate;

@@ -620,6 +620,7 @@ const ApplicationController = {
       if (approve === 'true') {
         application.status = ApplicationStatus.APPROVED;
         application.pendingApprovalRejectionDate = new Date();
+        application.approvedBy = admin._id;
 
         const certificateRef = await CertificateService.certificateReference();
         certificateHash = generateCertificateHash({
@@ -644,6 +645,7 @@ const ApplicationController = {
         if (!rejectionReason) return errorResponse(res, "rejection reason is required", 400);
         application.status = ApplicationStatus.REJECTED;
         application.pendingApprovalRejectionDate = new Date();
+        application.rejectedBy = admin._id;
 
         emitter.emit('application-rejected', {
           email: user.email,

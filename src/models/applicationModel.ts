@@ -31,6 +31,8 @@ export interface IApplication extends Document {
   pendingPaymentLink?: string | null;
   pendingApprovalRejectionDate?: Date | null
   user: Types.ObjectId; // reference to User model
+  approvedBy?: Types.ObjectId | null;
+  rejectedBy?: Types.ObjectId | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -64,9 +66,26 @@ const applicationSchema = new Schema<IApplication>(
       ref: "User",
       required: true,
     },
+    approvedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+    },
+    rejectedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+    },
   },
   { timestamps: true }
 );
+// Admin list: status + LGA (each $or branch needs its own index)
+applicationSchema.index({ status: 1, lga: 1 });
+applicationSchema.index({ status: 1, lgaOfResident: 1 });
+
+// Applicant's own applications
+applicationSchema.index({ user: 1, createdAt: -1 });
+// Admin's filtered applications
+applicationSchema.index({ approvedBy: 1, status: 1 });
+applicationSchema.index({ rejectedBy: 1, status: 1 });
 
 const Application = mongoose.model<IApplication>("Application", applicationSchema);
 export default Application;

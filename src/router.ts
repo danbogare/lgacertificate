@@ -71,6 +71,8 @@ router.get("/certificate/payment/verify", CertificateController.verifyCertificat
 router.get("/certificate/verify/:ref", CertificateController.confirmVerificationCode);
 router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
 router.get("/certificate/:applicationId", authMiddleware, CertificateController.getCertificateByApplicationId);
+router.get("/certificate/:id", authMiddleware, CertificateController.getCertificateById);
+router.get("/certificates/admin", adminAuthMiddleware, CertificateController.getCertificatesByAdmin);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
 router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
 router.put("/certificate/revoke/:id", adminAuthMiddleware, validate(schemas.revocationReasonSchema), CertificateController.revokeCertificate);

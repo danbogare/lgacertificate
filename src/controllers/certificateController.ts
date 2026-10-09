@@ -12,10 +12,11 @@ import Transaction, {
   TransactionStatus,
   TransactionType,
 } from '../models/transactionModel';
-import Application, { IApplication } from '../models/applicationModel';
+import Application, { ApplicationStatus, IApplication } from '../models/applicationModel';
 import User from '../models/userModel';
 import emitter from '../utils/common/eventlisteners';
 import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTransactionModel';
+import { AdminRole } from '../models/adminModel';
 
 const CertificateController = {
   requestVerificationCode: async (req: AuthenticatedRequest, res: Response) => {
@@ -426,6 +427,98 @@ const CertificateController = {
       });
     } catch (err) {
       console.error("revokeCertificate error:", err);
+      return errorResponse(res, "Internal server error", 500);
+    }
+  },
+
+  getCertificatesByAdmin: async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const admin = req.user;
+
+    const appFilter: Record<string, any> = { status: ApplicationStatus.APPROVED };
+
+    if (admin.role !== AdminRole.SUPER_ADMIN) {
+      if (!admin.lga) {
+        return errorResponse(res, "Official LGA not set", 403);
+      }
+      appFilter.$or = [{ lga: admin.lga }, { lgaOfResident: admin.lga }];
+    }
+
+    const applicationIds = await Application.find(appFilter).distinct("_id");
+
+    const certificates = await Certificate.find({
+      application: { $in: applicationIds },
+    })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "application",
+        select: "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+      })
+      .lean();
+
+    return successResponse(res, "Certificates retrieved successfully", { certificates });
+  } catch (err: any) {
+    console.error("getCertificatesByAdmin error:", err);
+    return errorResponse(res, "Internal server error", 500);
+  }
+},
+
+  getCertificateById: async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const user = req.user;
+      const { id } = req.params;
+
+      if (!user) {
+        return errorResponse(res, "Unauthorized", 401);
+      }
+
+      if (!mongoose.isValidObjectId(id)) {
+        return errorResponse(res, "Invalid certificate id", 400);
+      }
+
+      const certificate = await Certificate.findById(id)
+        .populate<{ application: IApplication | null }>({
+          path: "application",
+          select:
+            "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+        })
+        .populate({
+          path: "revokedBy",
+          select: "firstName middleName lastName email phone state",
+        })
+        .lean();
+
+      if (!certificate) {
+        return errorResponse(res, "Certificate not found", 404);
+      }
+
+      // Access control
+      const isOwner = certificate.user.toString() === user._id.toString();
+      const isSuperAdmin = user.role === AdminRole.SUPER_ADMIN;
+
+      const app = certificate.application; // null if the application was deleted
+      const isLgaAdmin =
+        user.role === AdminRole.ADMIN &&
+        !!user.lga &&
+        !!app &&
+        (user.lga === app.lga || user.lga === app.lgaOfResident);
+
+      if (!isOwner && !isSuperAdmin && !isLgaAdmin) {
+        return errorResponse(res, "Forbidden", 403);
+      }
+
+      // Only admins see the revoking official's contact details
+      const isAdminViewer = isSuperAdmin || isLgaAdmin;
+      let result: any = certificate;
+
+      if (!isAdminViewer && certificate.revokedBy) {
+        const { email, phone, ...safeRevokedBy } = certificate.revokedBy as any;
+        result = { ...certificate, revokedBy: safeRevokedBy };
+      }
+
+      return successResponse(res, "Certificate retrieved successfully", { certificate: result });
+    } catch (err: any) {
+      console.error("getCertificateById error:", err);
       return errorResponse(res, "Internal server error", 500);
     }
   },
