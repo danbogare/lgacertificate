@@ -111,7 +111,7 @@ router.post(
 
 // confirmation of partner transaction
 router.post(
-    '/partner/transaction/:sourceId?source=:source',
+    '/partner/transaction/:sourceId',
     authMiddleware,
     PartnerController.getPartnerTransaction
 );
