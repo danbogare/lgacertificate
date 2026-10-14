@@ -35,6 +35,7 @@ const ApplicationController = {
         motherNames,
         nativeTown,
         nativePoliticalWard,
+        nativePollingUnit,
         village,
         communityHead,
         communityHeadContact,
@@ -104,12 +105,17 @@ const ApplicationController = {
         }
       }
 
+      if (isResidentOfOgunBool) {
+        return errorResponse(res, "Certificate of Residency not available yet", 400);
+      }
+
       if (stateOfOrigin === "Ogun") {
         const requiredFields = {
           fatherNames,
           motherNames,
           nativeTown,
           nativePoliticalWard,
+          nativePollingUnit,
           village,
           communityHead,
           communityHeadContact,
@@ -170,6 +176,7 @@ const ApplicationController = {
         fatherNames: stateOfOrigin === "Ogun" ? fatherNames : null,
         motherNames: stateOfOrigin === "Ogun" ? motherNames : null,
         nativeTown: stateOfOrigin === "Ogun" ? nativeTown : null,
+        nativePollingUnit: stateOfOrigin === "Ogun" ? nativePollingUnit : null,
         nativePoliticalWard: stateOfOrigin === "Ogun" ? nativePoliticalWard : null,
         village: stateOfOrigin === "Ogun" ? village : null,
         communityHead: stateOfOrigin === "Ogun" ? communityHead : null,
@@ -227,6 +234,7 @@ const ApplicationController = {
         motherNames,
         nativeTown,
         nativePoliticalWard,
+        nativePollingUnit,
         village,
         communityHead,
         communityHeadContact,
@@ -305,12 +313,17 @@ const ApplicationController = {
         }
       }
 
+      if (isResidentOfOgunBool) {
+        return errorResponse(res, "Certificate of Residency not available yet", 400);
+      }
+
       if (stateOfOrigin === "Ogun") {
         const requiredFields = {
           fatherNames,
           motherNames,
           nativeTown,
           nativePoliticalWard,
+          nativePollingUnit,
           village,
           communityHead,
           communityHeadContact,
@@ -365,6 +378,7 @@ const ApplicationController = {
         motherNames: stateOfOrigin === "Ogun" ? motherNames : null,
         nativeTown: stateOfOrigin === "Ogun" ? nativeTown : null,
         nativePoliticalWard: stateOfOrigin === "Ogun" ? nativePoliticalWard : null,
+        nativePollingUnit: stateOfOrigin === "Ogun" ? nativePollingUnit : null,
         village: stateOfOrigin === "Ogun" ? village : null,
         communityHead: stateOfOrigin === "Ogun" ? communityHead : null,
         communityHeadContact: stateOfOrigin === "Ogun" ? communityHeadContact : null,

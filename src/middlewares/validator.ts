@@ -86,6 +86,7 @@ const schemas = {
     motherNames: Joi.string().custom(rejectSpecialCharacters).optional(),
     nativeTown: Joi.string().custom(rejectSpecialCharacters).optional(),
     nativePoliticalWard: Joi.string().custom(rejectSpecialCharacters).optional(),
+    nativePollingUnit: Joi.string().custom(rejectSpecialCharacters).optional(),
     communityHead: Joi.string().custom(rejectSpecialCharacters).optional(),
     communityHeadContact: Joi.string().custom(rejectSpecialCharacters).optional(),
     village: Joi.string().custom(rejectSpecialCharacters).optional(),

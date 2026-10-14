@@ -14,6 +14,7 @@ export interface IApplication extends Document {
   fatherNames?: string;
   motherNames?: string;
   nativeTown?: string;
+  nativePollingUnit?: string;
   nativePoliticalWard?: string;
   village?: string;
   communityHead?: string;
@@ -45,6 +46,7 @@ const applicationSchema = new Schema<IApplication>(
     fatherNames: { type: String },
     motherNames: { type: String },
     nativeTown: { type: String },
+    nativePollingUnit: { type: String },
     nativePoliticalWard: { type: String },
     village: { type: String },
     communityHead: { type: String },
