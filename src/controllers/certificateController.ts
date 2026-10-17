@@ -150,7 +150,7 @@ const CertificateController = {
 
       const partnerTransaction = new PartnerTransaction({
         payerId: user._id,
-        paymentRef: response?.data?.result?.beneficiaryAccountName,
+        paymentRef: response?.data?.result?.data?.accountName,
         amount: config.app.CERTIFICATE_AMOUNT.toString(),
         transactionType: TransactionType.CERTIFICATE,
         type: PaymentType.CAPTURE,
@@ -163,7 +163,7 @@ const CertificateController = {
 
       return successResponse(res, 'Dynamic partner account created successfully.', {
         certificateId: certificate._id,
-        paymentData: response?.data?.result,
+        paymentData: response?.data?.result?.data,
       });
     } catch (err: any) {
       await session.abortTransaction();

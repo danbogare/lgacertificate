@@ -369,7 +369,7 @@ const ApplicationController = {
         await session.abortTransaction();
         console.log(response);
         return errorResponse(res, 'an error has occurred', 500);
-      }
+      }      
 
       const application: IApplication = new Application({
         fullNames,
@@ -401,7 +401,7 @@ const ApplicationController = {
 
       const partnerTransaction = new PartnerTransaction({
         payerId: user._id,
-        paymentRef: response?.data?.result?.beneficiaryAccountName,
+        paymentRef: response?.data?.result?.data?.accountName,
         amount: config.app.APPLICATION_AMOUNT.toString(),
         transactionType: TransactionType.APPLICATION,
         type: PaymentType.CAPTURE,
@@ -414,7 +414,7 @@ const ApplicationController = {
 
       return successResponse(res, 'Dynamic partner account created successfully.', {
         applicationId: application._id,
-        paymentData: response?.data?.result,
+        paymentData: response?.data?.result?.data,
       });
     } catch (err: any) {
       await session.abortTransaction();
