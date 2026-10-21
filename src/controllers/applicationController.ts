@@ -22,6 +22,7 @@ import statesData from '../services/states.json';
 import { AdminRole } from '../models/adminModel';
 import { PipelineStage, FilterQuery } from "mongoose";
 import PartnerTransaction, { PaymentMethod, PaymentStatus, PaymentType } from '../models/partnerTransactionModel';
+import { getLgaCode } from '../utils/lgaCodes';
 
 const ApplicationController = {
   createApplication: async (req: AuthenticatedRequest, res: Response) => {
@@ -618,8 +619,12 @@ const ApplicationController = {
         return errorResponse(res, 'application not found', 404);
       }
 
-      if (admin.lga !== application.lga && admin.lga !== application.lgaOfResident) {
-         return errorResponse(res, "request revoked: officials can only approve applications relating to their respective LGA", 400);
+      // state + LGA together identify the issuer (LGA names repeat across states)
+      const isIssuer =
+        (admin.state === application.stateOfOrigin && admin.lga === application.lga) ||
+        admin.lga === application.lgaOfResident; // existing residency rule, unchanged
+      if (!isIssuer) {
+        return errorResponse(res, "request revoked: officials can only approve applications relating to their respective LGA", 400);
       }
 
       if (application.status === ApplicationStatus.APPROVED) return errorResponse(res, 'application already approved', 400);
@@ -629,48 +634,70 @@ const ApplicationController = {
       const user = await User.findById(application.user);
       if (!user) return errorResponse(res, 'user not found', 400);
 
-      let certificateHash;
-
       if (approve === 'true') {
-        application.status = ApplicationStatus.APPROVED;
-        application.pendingApprovalRejectionDate = new Date();
-        application.approvedBy = admin._id;
+        // clean 400 if this state/LGA has not been onboarded yet
+        try {
+          getLgaCode(application.stateOfOrigin, application.lga);
+        } catch {
+          return errorResponse(res, 'Certificate numbering is not configured for this LGA', 400);
+        }
 
-        const certificateRef = await CertificateService.certificateReference();
-        certificateHash = generateCertificateHash({
-          certificateRef,
-          applicationId: String(application._id),
-          userId: application.user.toString(),
-        });
+        let certificateHash = '';
+        const session = await mongoose.startSession();
+        try {
+          // counter + certificate + application update commit together or not at all
+          await session.withTransaction(async () => {
+            application.status = ApplicationStatus.APPROVED;
+            application.pendingApprovalRejectionDate = new Date();
+            application.approvedBy = admin._id;
 
-        await Certificate.create({
-          certificateRef,
-          certificateHash,
-          application: application._id,
-          user: application.user,
-        });
+            const certificateRef = await CertificateService.certificateReference(application, session);
+            certificateHash = generateCertificateHash({
+              certificateRef,
+              applicationId: String(application._id),
+              userId: application.user.toString(),
+            });
 
+            await Certificate.create(
+              [{
+                certificateRef,
+                certificateHash,
+                application: application._id,
+                user: application.user,
+              }],
+              { session }
+            );
+            await application.save({ session });
+          });
+        } finally {
+          await session.endSession();
+        }
+
+        // emit AFTER commit (withTransaction can retry the callback)
         emitter.emit('application-approved', {
           email: user.email,
           name: `${user.firstName} ${user.lastName}`,
           applicationID: application._id,
         });
-      } else {
-        if (!rejectionReason) return errorResponse(res, "rejection reason is required", 400);
-        application.status = ApplicationStatus.REJECTED;
-        application.pendingApprovalRejectionDate = new Date();
-        application.rejectedBy = admin._id;
 
-        emitter.emit('application-rejected', {
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          applicationID: application._id,
-          rejectionReason: rejectionReason,
-        });
+        return successResponse(res, 'application approved successfully', { certificateHash, application });
       }
+
+      // rejection path
+      if (!rejectionReason) return errorResponse(res, "rejection reason is required", 400);
+      application.status = ApplicationStatus.REJECTED;
+      application.pendingApprovalRejectionDate = new Date();
+      application.rejectedBy = admin._id;
       await application.save();
 
-      return successResponse(res, 'application approved successfully', { certificateHash, application });
+      emitter.emit('application-rejected', {
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        applicationID: application._id,
+        rejectionReason: rejectionReason,
+      });
+
+      return successResponse(res, 'application rejected successfully', { application });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
     }

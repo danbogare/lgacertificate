@@ -18,7 +18,7 @@ export interface ICertificate extends Document {
 
 const certificateSchema = new Schema<ICertificate>(
   {
-    certificateRef: { type: String, required: true },
+    certificateRef: { type: String, unique: true, required: true },
     certificateHash: { type: String, required: true },
     verificationCode: { type: String },
     emailOfVerification: { type: String },

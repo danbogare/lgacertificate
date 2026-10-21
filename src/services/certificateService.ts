@@ -1,20 +1,24 @@
-import Certificate from "../models/certificationModal";
-import { generateCertificateRef } from "../utils/hash";
+import { ClientSession } from "mongoose";
+import Counter from "../models/counterModel";
+import { getLgaCode, getStateCode } from "../utils/lgaCodes";
 
 const CertificateService = {
-    certificateReference: async (): Promise<string> => {
-        let ref = "";
-        let exists = true;
+    certificateReference: async (
+        application: { stateOfOrigin: string; lga: string },
+        session?: ClientSession
+    ): Promise<string> => {
+        const stateCode = getStateCode(application.stateOfOrigin);
+        const lgaCode = getLgaCode(application.stateOfOrigin, application.lga);
 
-        while (exists) {
-            ref = generateCertificateRef(9);
-            const existing = await Certificate.exists({ certificateRef: ref });
-            exists = !!existing;
-        }
+        // atomic increment: safe when two admins approve at the same time
+        const counter = await Counter.findOneAndUpdate(
+            { _id: `${stateCode}-${lgaCode}-CO` },
+            { $inc: { seq: 1 } },
+            { upsert: true, new: true, session }
+        );
 
-        return ref;
+        return `${stateCode}/${lgaCode}/CO/${String(counter.seq).padStart(9, "0")}`;
     }
-
 };
 
 export default CertificateService;
