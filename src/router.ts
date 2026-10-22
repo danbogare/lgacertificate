@@ -68,14 +68,14 @@ router.post("/admin/download/application", adminAuthMiddleware, ApplicationContr
 router.post("/certificate/request-verification/:id", authMiddleware, validate(schemas.forgotPasswordSchema), CertificateController.requestVerificationCode);
 router.post("/certificate/partner/request-verification/:id", authMiddleware, validate(schemas.forgotPasswordSchema), CertificateController.partnerRequestVerificationCode);
 router.get("/certificate/payment/verify", CertificateController.verifyCertificateVerificationCodePayment);
-router.get("/certificate/verify/:ref", CertificateController.confirmVerificationCode);
+router.get("/certificate/verify", CertificateController.confirmVerificationCode);
 router.get("/certificate/verify-hash/:hash", CertificateController.verifyCertificateHash);
 router.get("/certificate/:applicationId", authMiddleware, CertificateController.getCertificateByApplicationId);
 router.get("/certificate/:id", authMiddleware, CertificateController.getCertificateById);
 router.get("/certificate/admin/:id", adminAuthMiddleware, CertificateController.getCertificateById);
 router.get("/certificates/admin", adminAuthMiddleware, CertificateController.getCertificatesByAdmin);
 router.get("/certificates", authMiddleware, CertificateController.getCertificates);
-router.delete("/certificate/nullify-verification/:ref", CertificateController.nullifyVerificationCode);
+router.delete("/certificate/nullify-verification", CertificateController.nullifyVerificationCode);
 router.put("/certificate/revoke/:id", adminAuthMiddleware, validate(schemas.revocationReasonSchema), CertificateController.revokeCertificate);
 
 // Util Routers

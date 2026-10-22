@@ -568,14 +568,16 @@ const ApplicationController = {
           const applications = await Application.find({ 
           status: ApplicationStatus.APPROVED,
         }).sort({ createdAt: -1 }).populate('user', 'firstName lastName email');
-
       
         return successResponse(res, 'approved application retrieved successfully', { applications });
       }
 
       const applications = await Application.find({ 
         status: ApplicationStatus.APPROVED, 
-        $or: [{lga: admin.lga}, {lgaOfResident: admin.lga}]
+        $or: [
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga },
+          { lgaOfResident: admin.lga },
+        ],
       }).sort({ createdAt: -1 }).populate('user', 'firstName lastName email');
       
       return successResponse(res, 'approved application retrieved successfully', { applications });
@@ -598,7 +600,10 @@ const ApplicationController = {
 
       const applications = await Application.find({ 
         status: ApplicationStatus.REJECTED,
-        $or: [{lga: admin.lga}, {lgaOfResident: admin.lga}] 
+        $or: [
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga },
+          { lgaOfResident: admin.lga },
+        ],
       }).sort({ createdAt: -1 });
       
       return successResponse(res, 'rejected application retrieved successfully', { applications });
@@ -707,6 +712,7 @@ const ApplicationController = {
     try {
       const admin = req.user;
       const lga = req.query.lga as string | undefined;
+      const state = (req.query.state as string | undefined) || admin.stateOfOrigin;
 
       const match: FilterQuery<IApplication> = {};
 
@@ -714,16 +720,21 @@ const ApplicationController = {
         if (admin.role !== AdminRole.SUPER_ADMIN)
           return errorResponse(res, "Unauthorized", 401);
 
-        const validLgas = statesData["Ogun" as keyof typeof statesData];
+        const validLgas = statesData[state as keyof typeof statesData];
+        if (!validLgas) {
+          return errorResponse(res, "Invalid state", 400);
+        }
         if (!validLgas.includes(lga)) {
-          return errorResponse(res, "Invalid LGA for Ogun State", 400);
+          return errorResponse(res, `Invalid LGA for ${state} State`, 400);
         }
 
+        match.stateOfOrigin = state;
         match.lga = lga;
       }
 
       // Role based LGA restriction
       if (admin.role !== AdminRole.SUPER_ADMIN) {
+        match.stateOfOrigin = admin.stateOfOrigin;
         match.lga = admin.lga;
       }
 
@@ -892,7 +903,10 @@ const ApplicationController = {
       const match: FilterQuery<IApplication> = {};
 
       if (admin.role !== AdminRole.SUPER_ADMIN) {
-        match.$or = [{ lga: admin.lga }, { lgaOfResident: admin.lga }];
+        match.$or = [
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga }, 
+          { lgaOfResident: admin.lga }
+        ];
       }
 
       if (name) {
@@ -992,7 +1006,10 @@ const ApplicationController = {
       const match: FilterQuery<IApplication> = {};
 
       if (admin.role !== AdminRole.SUPER_ADMIN) {
-        match.$or = [{ lga: admin.lga }, { lgaOfResident: admin.lga }];
+        match.$or = [
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga }, 
+          { lgaOfResident: admin.lga }
+        ];
       }
 
       if (status && !Object.values(ApplicationStatus).includes(status as ApplicationStatus)) return errorResponse(res, "Invalid application status", 400);

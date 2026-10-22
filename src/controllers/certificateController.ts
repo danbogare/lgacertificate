@@ -267,10 +267,15 @@ const CertificateController = {
 
   confirmVerificationCode: async (req: Request, res: Response) => {
     try {
-      const fullReference = req.params.ref;
-      if (!fullReference) return errorResponse(res, 'Invalid Request', 400);
+      // code looks like OG/OWL/CO/000000001-AB12CD3, so split on the LAST hyphen
+      const fullRef = String(req.query.code || '').trim();
+      if (!fullRef) return errorResponse(res, 'Invalid Request', 400);
 
-      const [certificateRef, verificationCode] = String(fullReference).split('-');
+      const idx = fullRef.lastIndexOf('-');
+      if (idx === -1) return errorResponse(res, 'Invalid Reference Format', 400);
+
+      const certificateRef = fullRef.slice(0, idx);
+      const verificationCode = fullRef.slice(idx + 1);
       if (!certificateRef || !verificationCode)
         return errorResponse(res, 'Invalid Reference Format', 400);
 
@@ -279,11 +284,12 @@ const CertificateController = {
 
       if (!certificate.verificationCode) return errorResponse(res, 'Certificate not verified', 400);
 
-      const certVerificationCode = certificate.verificationCode?.split('-')[1]
-  
+      const stored = certificate.verificationCode;
+      const certVerificationCode = stored.slice(stored.lastIndexOf('-') + 1);
+
       if (verificationCode !== certVerificationCode) return errorResponse(res, 'Certificate not verified', 400);
 
-      return successResponse(res, 'Certificate verified', { ref: certificateRef,  certificate});
+      return successResponse(res, 'Certificate verified', { ref: certificateRef, certificate });
     } catch (err: any) {
       return errorResponse(res, err.message, 500);
     }
@@ -334,7 +340,7 @@ const CertificateController = {
 
   nullifyVerificationCode: async (req: Request, res: Response) => {
     try {
-      const ref = req.params.ref;
+      const ref = String(req.query.ref || '').trim();
       if (!ref) return errorResponse(res, 'Invalid Request', 400);
 
       const certificate = await Certificate.findOne({ certificateRef: ref });
@@ -409,8 +415,11 @@ const CertificateController = {
         return errorResponse(res, "Certificate already revoked", 409);
       }
 
-      const { lga, lgaOfResident } = certificate.application;
-      if (admin.lga !== lga && admin.lga !== lgaOfResident) {
+      const { lga, lgaOfResident, stateOfOrigin } = certificate.application;
+      const isIssuer =
+        (admin.stateOfOrigin === stateOfOrigin && admin.lga === lga) ||
+        admin.lga === lgaOfResident;
+      if (!isIssuer) {
         return errorResponse(res, "Officials can only revoke certificates relating to their LGA", 403);
       }
 
@@ -432,36 +441,39 @@ const CertificateController = {
   },
 
   getCertificatesByAdmin: async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const admin = req.user;
+    try {
+      const admin = req.user;
 
-    const appFilter: Record<string, any> = { status: ApplicationStatus.APPROVED };
+      const appFilter: Record<string, any> = { status: ApplicationStatus.APPROVED };
 
-    if (admin.role !== AdminRole.SUPER_ADMIN) {
-      if (!admin.lga) {
-        return errorResponse(res, "Official LGA not set", 403);
+      if (admin.role !== AdminRole.SUPER_ADMIN) {
+        if (!admin.lga) {
+          return errorResponse(res, "Official LGA not set", 403);
+        }
+        appFilter.$or = [
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga },
+          { lgaOfResident: admin.lga },
+        ];
       }
-      appFilter.$or = [{ lga: admin.lga }, { lgaOfResident: admin.lga }];
-    }
 
-    const applicationIds = await Application.find(appFilter).distinct("_id");
+      const applicationIds = await Application.find(appFilter).distinct("_id");
 
-    const certificates = await Certificate.find({
-      application: { $in: applicationIds },
-    })
-      .sort({ createdAt: -1 })
-      .populate({
-        path: "application",
-        select: "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+      const certificates = await Certificate.find({
+        application: { $in: applicationIds },
       })
-      .lean();
+        .sort({ createdAt: -1 })
+        .populate({
+          path: "application",
+          select: "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate",
+        })
+        .lean();
 
-    return successResponse(res, "Certificates retrieved successfully", { certificates });
-  } catch (err: any) {
-    console.error("getCertificatesByAdmin error:", err);
-    return errorResponse(res, "Internal server error", 500);
-  }
-},
+      return successResponse(res, "Certificates retrieved successfully", { certificates });
+    } catch (err: any) {
+      console.error("getCertificatesByAdmin error:", err);
+      return errorResponse(res, "Internal server error", 500);
+    }
+  },
 
   getCertificateById: async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -484,7 +496,7 @@ const CertificateController = {
         })
         .populate({
           path: "revokedBy",
-          select: "firstName middleName lastName email phone state",
+          select: "firstName middleName lastName email phone stateOfOrigin",
         })
         .lean();
 
@@ -501,7 +513,8 @@ const CertificateController = {
         user.role === AdminRole.ADMIN &&
         !!user.lga &&
         !!app &&
-        (user.lga === app.lga || user.lga === app.lgaOfResident);
+        ((user.stateOfOrigin === app.stateOfOrigin && user.lga === app.lga) ||
+          user.lga === app.lgaOfResident);
 
       if (!isOwner && !isSuperAdmin && !isLgaAdmin) {
         return errorResponse(res, "Forbidden", 403);
