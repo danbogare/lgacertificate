@@ -548,7 +548,7 @@ const ApplicationController = {
       const applications = await Application.find({
         status: ApplicationStatus.PENDING,
         $or: [
-          { lga: admin.lga },
+          { stateOfOrigin: admin.stateOfOrigin, lga: admin.lga },
           { lgaOfResident: admin.lga }
         ]
       }).sort({ createdAt: -1 });
@@ -621,7 +621,7 @@ const ApplicationController = {
 
       // state + LGA together identify the issuer (LGA names repeat across states)
       const isIssuer =
-        (admin.state === application.stateOfOrigin && admin.lga === application.lga) ||
+        (admin.stateOfOrigin === application.stateOfOrigin && admin.lga === application.lga) ||
         admin.lga === application.lgaOfResident; // existing residency rule, unchanged
       if (!isIssuer) {
         return errorResponse(res, "request revoked: officials can only approve applications relating to their respective LGA", 400);
