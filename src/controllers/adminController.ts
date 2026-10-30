@@ -213,6 +213,7 @@ const AdminController = {
       const hashedPassword = await hash(newPassword);
 
       admin.password = hashedPassword;
+      admin.mustResetPassword = false; // Reset the flag after changing password
       await admin.save();
 
       return successResponse(res, 'Password changed successfully', {
