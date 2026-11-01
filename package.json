@@ -2,12 +2,12 @@
   "name": "lgacertificate",
   "version": "1.0.0",
   "description": "Local Government Issuing LGA Certificate",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "nodemon",
     "build": "tsc",
-    "heroku-postbuild": "npm run build"
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [
     "LGA",

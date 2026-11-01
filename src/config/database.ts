@@ -1,17 +1,45 @@
 import mongoose from "mongoose";
-import { config } from "./app";
-import UtilServices from "../services/utilService";
+import { env } from "./env";
 
-const connectDB = async (): Promise<void> => {
-  try {
-    await mongoose.connect(config.database.DB as string);
-    console.log("✅ MongoDB connected");
+class DatabaseManager {
+  private static instance: DatabaseManager;
 
-    await UtilServices.superSignup();
-  } catch (err) {
-    console.error("❌ MongoDB connection failed:", err);
-    process.exit(1);
+  private constructor() {
+    this.registerEventListeners();
   }
-};
 
-export default connectDB;
+  public static getInstance(): DatabaseManager {
+    if (!DatabaseManager.instance) {
+      DatabaseManager.instance = new DatabaseManager();
+    }
+    return DatabaseManager.instance;
+  }
+
+  private registerEventListeners(): void {
+    mongoose.connection.on("connected", () => {
+      console.log("MongoDB connected successfully.");
+    });
+
+    mongoose.connection.on("error", (error) => {
+      console.error(`MongoDB connection error: ${error}`);
+    });
+
+    mongoose.connection.on("disconnected", () => {
+      console.warn("MongoDB disconnected.");
+    });
+  }
+
+  public async connect(): Promise<void> {
+    await mongoose.connect(env.mongoUri);
+  }
+
+  public async disconnect(): Promise<void> {
+    try {
+      await mongoose.disconnect();
+    } catch (error) {
+      console.error("Error during MongoDB disconnection:", error);
+    }
+  }
+}
+
+export const dbManager = DatabaseManager.getInstance();

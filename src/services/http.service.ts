@@ -1,0 +1,76 @@
+import axios, { AxiosRequestConfig } from "axios";
+import { setTimeout as sleep } from "timers/promises";
+import { IProviderResponse } from "../interfaces/payment.interface";
+
+const DEFAULT_TIMEOUT_MS = 10_000;
+const RETRY_DELAYS_MS = [500, 1000, 2000];
+
+export interface IRequestOptions<T> {
+  // Lets a provider's own failure response (sent with a 2xx status) be retried like a failed call
+  isFailedResponse?: (data: T) => boolean;
+}
+
+export interface IHttpClient {
+  request<T extends IProviderResponse>(
+    method: AxiosRequestConfig["method"],
+    url: string,
+    payload?: object,
+    headers?: AxiosRequestConfig["headers"],
+    options?: IRequestOptions<T>
+  ): Promise<T>;
+}
+
+// Retries failed calls up to 3 times with a growing pause. Once retries run out it resolves to the
+// provider's last failure response, or { status: "error", success: false } when there was none,
+// so callers check the provider status instead of catching. Unreachable providers still throw.
+export class HttpClient implements IHttpClient {
+  public async request<T extends IProviderResponse>(
+    method: AxiosRequestConfig["method"],
+    url: string,
+    payload?: object,
+    headers?: AxiosRequestConfig["headers"],
+    options: IRequestOptions<T> = {}
+  ): Promise<T> {
+    const config: AxiosRequestConfig = {
+      method,
+      url,
+      data: payload,
+      headers,
+      timeout: DEFAULT_TIMEOUT_MS,
+      maxRedirects: 5,
+    };
+
+    let failure: T = { status: "error", success: false } as T;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      if (attempt > 0) {
+        console.warn(`${method} ${url} failed, retry ${attempt} of ${RETRY_DELAYS_MS.length}`);
+        await sleep(RETRY_DELAYS_MS[attempt - 1]);
+      }
+
+      try {
+        const { data } = await axios.request<T>(config);
+        if (!options.isFailedResponse?.(data)) return data;
+        failure = data;
+        lastError = undefined;
+      } catch (error) {
+        // Client errors such as bad credentials won't succeed on a retry
+        if (!this.isRetryable(error)) return failure;
+        lastError = error;
+      }
+    }
+
+    if ((lastError as Error | undefined)?.message === "Network Error") {
+      throw new Error("Unable to connect to the server. Please try again later.");
+    }
+    return failure;
+  }
+
+  // Timeouts, connection failures, 5xx, 408 and 429 are worth another try
+  private isRetryable(error: unknown): boolean {
+    if (!axios.isAxiosError(error) || !error.response) return true;
+    const { status } = error.response;
+    return status >= 500 || status === 408 || status === 429;
+  }
+}
