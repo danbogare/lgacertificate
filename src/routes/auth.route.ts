@@ -4,6 +4,7 @@ import { IAuthMiddleware } from "../middlewares/auth.middleware";
 import { validate } from "../middlewares/validation.middleware";
 import { asyncHandler } from "../middlewares/async-handler.middleware";
 import { loginSchema, resetPasswordSchema, signupSchema, verifyEmailSchema } from "../validators/auth.validator";
+import { changePasswordSchema } from "../validators/admin.validator";
 import { emailSchema } from "../validators/common.validator";
 
 // Mounted at /api/v1/auth
@@ -30,6 +31,12 @@ export class AuthRouter {
       asyncHandler(this.authController.requestEmailVerification)
     );
     this.router.post("/login", validate(loginSchema), asyncHandler(this.authController.login));
+    this.router.post(
+      "/change-password",
+      asyncHandler(this.authMiddleware.requireUser),
+      validate(changePasswordSchema),
+      asyncHandler(this.authController.changePassword)
+    );
     this.router.post("/forgot-password", validate(emailSchema), asyncHandler(this.authController.forgotPassword));
     this.router.post("/reset-password", validate(resetPasswordSchema), asyncHandler(this.authController.resetPassword));
     this.router.post("/resend-otp", validate(emailSchema), asyncHandler(this.authController.resendOTP));

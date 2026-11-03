@@ -11,6 +11,7 @@ export interface IAuthController {
   forgotPassword: (req: Request, res: Response) => Promise<void>;
   resetPassword: (req: Request, res: Response) => Promise<void>;
   resendOTP: (req: Request, res: Response) => Promise<void>;
+  changePassword: (req: Request, res: Response) => Promise<void>;
 }
 
 export class AuthController implements IAuthController {
@@ -67,5 +68,13 @@ export class AuthController implements IAuthController {
     const user = await this.authService.resendOTP(req.body.email);
 
     successResponse(res, "OTP resent successfully", { email: user.email });
+  };
+
+  public changePassword = async (req: Request, res: Response): Promise<void> => {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await this.authService.changePassword(req.user as IUser, oldPassword, newPassword);
+
+    successResponse(res, "Password changed successfully", { email: user.email });
   };
 }

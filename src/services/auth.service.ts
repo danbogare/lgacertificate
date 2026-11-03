@@ -28,6 +28,7 @@ export interface IAuthService {
   forgotPassword(email: string): Promise<IUser>;
   resendOTP(email: string): Promise<IUser>;
   resetPassword(email: string, otp: string, password: string): Promise<void>;
+  changePassword(user: IUser, oldPassword: string, newPassword: string): Promise<IUser>;
 }
 
 export class AuthService implements IAuthService {
@@ -139,6 +140,14 @@ export class AuthService implements IAuthService {
     user.resetPasswordOTP = undefined;
     user.resetPasswordExpire = undefined;
     await this.userRepository.save(user);
+  }
+
+  public async changePassword(user: IUser, oldPassword: string, newPassword: string): Promise<IUser> {
+    const isMatch = await this.cryptoService.compareHash(oldPassword, user.password);
+    if (!isMatch) throw new BadRequestError("Old password does not match");
+
+    user.password = await this.cryptoService.hash(newPassword);
+    return await this.userRepository.save(user);
   }
 
   private async sendPasswordResetOtp(user: IUser): Promise<void> {
