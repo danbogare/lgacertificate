@@ -1,5 +1,6 @@
 import { IFlutterwaveConfig } from "../config/env";
 import { IFlutterwavePaymentPayload, IProviderResponse } from "../interfaces/payment.interface";
+import { RequestProvider } from "../models/requestDump.model";
 import { IHttpClient } from "./http.service";
 
 export interface IFlutterwaveService {
@@ -18,6 +19,8 @@ export class FlutterwaveService implements IFlutterwaveService {
   public async initializePayment(payload: IFlutterwavePaymentPayload): Promise<IProviderResponse> {
     return await this.httpClient.request("POST", `${this.config.uri}payments`, payload, this.headers(), {
       isFailedResponse: isFlutterwaveFailure,
+      provider: RequestProvider.FLUTTERWAVE,
+      reference: payload.tx_ref,
     });
   }
 
@@ -27,7 +30,11 @@ export class FlutterwaveService implements IFlutterwaveService {
       `${this.config.uri}transactions/${transactionId}/verify`,
       { null: null },
       this.headers(),
-      { isFailedResponse: isFlutterwaveFailure }
+      {
+        isFailedResponse: isFlutterwaveFailure,
+        provider: RequestProvider.FLUTTERWAVE,
+        reference: String(transactionId),
+      }
     );
   }
 

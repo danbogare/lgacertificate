@@ -4,6 +4,7 @@ import { env } from "./config/env";
 import { ErrorMiddleware } from "./middlewares/error.middleware";
 import { AuthMiddleware } from "./middlewares/auth.middleware";
 import { WebhookMiddleware } from "./middlewares/webhook.middleware";
+import { RequestDumpMiddleware } from "./middlewares/request-dump.middleware";
 import { rawBodySaver } from "./middlewares/raw-body.middleware";
 import { User } from "./models/user.model";
 import { Admin } from "./models/admin.model";
@@ -14,6 +15,7 @@ import { Transaction } from "./models/transaction.model";
 import { PartnerTransaction } from "./models/partnerTransaction.model";
 import { Signatory } from "./models/signatory.model";
 import { AuditLog } from "./models/auditLog.model";
+import { RequestDump } from "./models/requestDump.model";
 import { UserRepository } from "./repositories/user.repository";
 import { AdminRepository } from "./repositories/admin.repository";
 import { ApplicationRepository } from "./repositories/application.repository";
@@ -23,6 +25,7 @@ import { TransactionRepository } from "./repositories/transaction.repository";
 import { PartnerTransactionRepository } from "./repositories/partnerTransaction.repository";
 import { SignatoryRepository } from "./repositories/signatory.repository";
 import { AuditLogRepository } from "./repositories/auditLog.repository";
+import { RequestDumpRepository } from "./repositories/requestDump.repository";
 import { CryptoService } from "./services/crypto.service";
 import { MailService } from "./services/mail.service";
 import { CloudinaryService } from "./services/storage.service";
@@ -96,13 +99,14 @@ class App {
     const partnerTransactionRepository = new PartnerTransactionRepository(PartnerTransaction);
     const signatoryRepository = new SignatoryRepository(Signatory);
     const auditLogRepository = new AuditLogRepository(AuditLog);
+    const requestDumpRepository = new RequestDumpRepository(RequestDump);
 
     // services
     const auditService = new AuditService(auditLogRepository);
     const cryptoService = new CryptoService(env.jwtSecret, env.certificateSecret);
     const mailService = new MailService(env.smtp);
     const storageService = new CloudinaryService(env.cloudinary);
-    const httpClient = new HttpClient();
+    const httpClient = new HttpClient(requestDumpRepository);
     const flutterwaveService = new FlutterwaveService(httpClient, env.flutterwave);
     const partnerPaymentService = new PartnerPaymentService(httpClient, env.partner);
     const paymentService = new PaymentService(
@@ -148,6 +152,7 @@ class App {
     // middlewares
     const authMiddleware = new AuthMiddleware(cryptoService, userRepository, adminRepository);
     const webhookMiddleware = new WebhookMiddleware(env.partner.webhookSecret);
+    const requestDumpMiddleware = new RequestDumpMiddleware(requestDumpRepository);
 
     // controllers
     const authController = new AuthController(authService);
@@ -166,7 +171,12 @@ class App {
     const certificateRouter = new CertificateRouter(certificateController, authMiddleware);
     const locationRouter = new LocationRouter(locationController);
     const signatoryRouter = new SignatoryRouter(signatoryController, authMiddleware);
-    const partnerRouter = new PartnerRouter(partnerController, authMiddleware, webhookMiddleware);
+    const partnerRouter = new PartnerRouter(
+      partnerController,
+      authMiddleware,
+      webhookMiddleware,
+      requestDumpMiddleware
+    );
 
     this.instance.use(`${API_PREFIX}/auth`, authRouter.getRouter());
     this.instance.use(`${API_PREFIX}/application`, applicationRouter.getRouter());

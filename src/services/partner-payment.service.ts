@@ -1,5 +1,6 @@
 import { IPartnerConfig } from "../config/env";
 import { IPartnerDynamicAccountPayload, IProviderResponse } from "../interfaces/payment.interface";
+import { RequestProvider } from "../models/requestDump.model";
 import { IHttpClient } from "./http.service";
 
 export interface IPartnerPaymentService {
@@ -19,7 +20,7 @@ export class PartnerPaymentService implements IPartnerPaymentService {
       `${this.config.baseUrl}partners/dynamic/account`,
       payload,
       { "x-api-key": this.config.apiKey, "merchant-id": this.config.merchantId },
-      { isFailedResponse: (response) => !response?.success }
+      { isFailedResponse: (response) => !response?.success, provider: RequestProvider.PARTNER }
     );
   }
 }
