@@ -13,8 +13,10 @@ import { IPartnerPaymentService } from "./partner-payment.service";
 import { ICryptoService } from "./crypto.service";
 import { IPaymentRedirectQuery } from "../interfaces/payment.interface";
 import { BadRequestError, NotFoundError, PaymentProviderError } from "../errors/error";
+import { IProcessingChargeConfig } from "../config/env";
 
 export interface IFlutterwaveCheckout {
+  // Amount we must receive; processing charges are added on top
   amount: number;
   redirectUrl: string;
   title: string;
@@ -23,13 +25,36 @@ export interface IFlutterwaveCheckout {
 
 export interface IFlutterwaveCheckoutResult {
   transactionRef: string;
+  // What the payer is charged, including processing charges
+  amount: number;
   paymentLink: string;
 }
 
 export interface IPartnerCheckoutResult {
   // The partner identifies the payment by the generated account name
   paymentRef: string;
+  amount: number;
   paymentData: unknown;
+}
+
+export interface IProcessingCharges {
+  flutterwave: IProcessingChargeConfig;
+  partner: IProcessingChargeConfig;
+}
+
+// Grosses up the amount so we still receive it in full after the gateway takes its cut plus VAT:
+// C = (N + flat) / (1 - rate), with rate and flat each multiplied by (1 + vat).
+// Once the charge would exceed the cap (plus VAT), the payer pays N + cap * (1 + vat).
+// Rounded up to the next naira so we never land short.
+export function addProcessingCharges(amount: number, { rate, flat, cap, vat }: IProcessingChargeConfig): number {
+  const vatMultiplier = 1 + vat;
+  const effectiveRate = rate * vatMultiplier;
+  if (effectiveRate >= 1) throw new Error("Processing charge rate must be below 100%");
+
+  const grossed = (amount + flat * vatMultiplier) / (1 - effectiveRate);
+  const maxCharge = cap === undefined ? undefined : cap * vatMultiplier;
+  const total = maxCharge !== undefined && grossed - amount > maxCharge ? amount + maxCharge : grossed;
+  return Math.ceil(total);
 }
 
 export type FlutterwaveVerification =
@@ -55,15 +80,17 @@ export class PaymentService implements IPaymentService {
     private readonly partnerTransactionRepository: IPartnerTransactionRepository,
     private readonly flutterwaveService: IFlutterwaveService,
     private readonly partnerPaymentService: IPartnerPaymentService,
-    private readonly cryptoService: ICryptoService
+    private readonly cryptoService: ICryptoService,
+    private readonly processingCharges: IProcessingCharges
   ) {}
 
   public async startFlutterwaveCheckout(checkout: IFlutterwaveCheckout): Promise<IFlutterwaveCheckoutResult> {
     const transactionRef = this.cryptoService.generateTransactionRef();
+    const amount = addProcessingCharges(checkout.amount, this.processingCharges.flutterwave);
 
     const response = await this.flutterwaveService.initializePayment({
       tx_ref: transactionRef,
-      amount: checkout.amount.toString(),
+      amount: amount.toString(),
       currency: "NGN",
       redirect_url: checkout.redirectUrl,
       customer: {
@@ -76,10 +103,12 @@ export class PaymentService implements IPaymentService {
 
     if (response.status !== "success") throw new PaymentProviderError();
 
-    return { transactionRef, paymentLink: response.data?.link };
+    return { transactionRef, amount, paymentLink: response.data?.link };
   }
 
-  public async startPartnerCheckout(payerName: string, amount: number): Promise<IPartnerCheckoutResult> {
+  public async startPartnerCheckout(payerName: string, baseAmount: number): Promise<IPartnerCheckoutResult> {
+    const amount = addProcessingCharges(baseAmount, this.processingCharges.partner);
+
     const response = await this.partnerPaymentService.createDynamicAccount({
       firstName: payerName,
       lastName: this.cryptoService.generateTransactionRef(),
@@ -92,7 +121,7 @@ export class PaymentService implements IPaymentService {
     }
 
     const paymentData = response.data?.result?.data;
-    return { paymentRef: paymentData?.accountName, paymentData };
+    return { paymentRef: paymentData?.accountName, amount, paymentData };
   }
 
   public async recordTransaction(data: Partial<ITransaction>, session?: ClientSession): Promise<ITransaction> {

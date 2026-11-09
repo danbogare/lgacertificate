@@ -115,7 +115,7 @@ export class ApplicationService implements IApplicationService {
     const validated = await this.validateNewApplication(payload, uploads);
     const files = await this.uploadApplicationFiles(validated);
 
-    const { transactionRef, paymentLink } = await this.paymentService.startFlutterwaveCheckout({
+    const { transactionRef, amount, paymentLink } = await this.paymentService.startFlutterwaveCheckout({
       amount: this.config.applicationAmount,
       redirectUrl: `${this.config.apiUrl}/api/v1/application/payment/verify`,
       title: "LGA Certificate Application Payment",
@@ -131,7 +131,7 @@ export class ApplicationService implements IApplicationService {
       await this.paymentService.recordTransaction(
         {
           transactionRef,
-          amount: this.config.applicationAmount.toString(),
+          amount: amount.toString(),
           transactionType: TransactionType.APPLICATION,
           user: user._id as any,
           application: application._id as any,
@@ -153,7 +153,7 @@ export class ApplicationService implements IApplicationService {
     const validated = await this.validateNewApplication(payload, uploads);
     const files = await this.uploadApplicationFiles(validated);
 
-    const { paymentRef, paymentData } = await this.paymentService.startPartnerCheckout(
+    const { paymentRef, amount, paymentData } = await this.paymentService.startPartnerCheckout(
       payload.fullNames,
       this.config.applicationAmount
     );
@@ -168,7 +168,7 @@ export class ApplicationService implements IApplicationService {
         {
           payerId: user._id as any,
           paymentRef,
-          amount: this.config.applicationAmount.toString(),
+          amount: amount.toString(),
           transactionType: TransactionType.APPLICATION,
           applicationId: application._id as any,
         },

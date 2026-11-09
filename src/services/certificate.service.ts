@@ -93,7 +93,7 @@ export class CertificateService implements ICertificateService {
   public async requestVerificationCode(user: IUser, applicationId: string, email: string) {
     const certificate = await this.findCertificateAwaitingCode(user, applicationId);
 
-    const { transactionRef, paymentLink } = await this.paymentService.startFlutterwaveCheckout({
+    const { transactionRef, amount, paymentLink } = await this.paymentService.startFlutterwaveCheckout({
       amount: this.config.verificationAmount,
       redirectUrl: `${this.config.apiUrl}/api/v1/certificate/payment/verify`,
       title: "LGA Certificate Verification Payment",
@@ -109,7 +109,7 @@ export class CertificateService implements ICertificateService {
       await this.paymentService.recordTransaction(
         {
           transactionRef,
-          amount: this.config.verificationAmount.toString(),
+          amount: amount.toString(),
           transactionType: TransactionType.CERTIFICATE,
           user: user._id as any,
           certificate: certificate._id as any,
@@ -127,7 +127,7 @@ export class CertificateService implements ICertificateService {
     const application = await this.applicationRepository.findById(applicationId);
     if (!application) throw new NotFoundError("No application found for user");
 
-    const { paymentRef, paymentData } = await this.paymentService.startPartnerCheckout(
+    const { paymentRef, amount, paymentData } = await this.paymentService.startPartnerCheckout(
       application.fullNames,
       this.config.verificationAmount
     );
@@ -142,7 +142,7 @@ export class CertificateService implements ICertificateService {
         {
           payerId: user._id as any,
           paymentRef,
-          amount: this.config.verificationAmount.toString(),
+          amount: amount.toString(),
           transactionType: TransactionType.CERTIFICATE,
           certificateId: certificate._id as any,
         },

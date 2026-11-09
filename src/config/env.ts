@@ -27,6 +27,15 @@ export interface IFlutterwaveConfig {
   secret: string;
 }
 
+// Processing charge passed on to the payer. rate and vat are fractions (0.02 = 2%).
+// cap limits the charge before VAT, if set; vat is charged on top of the gateway's fee.
+export interface IProcessingChargeConfig {
+  rate: number;
+  flat: number;
+  cap?: number;
+  vat: number;
+}
+
 export interface IPartnerConfig {
   baseUrl: string;
   apiKey: string;
@@ -45,6 +54,10 @@ interface EnvConfig {
   trustProxy: number;
   applicationAmount: number;
   certificateAmount: number;
+  processingCharges: {
+    flutterwave: IProcessingChargeConfig;
+    partner: IProcessingChargeConfig;
+  };
   superAdmin: ISuperAdminSeedConfig;
   smtp: ISMTPConfig;
   cloudinary: ICloudinaryConfig;
@@ -56,6 +69,14 @@ interface EnvConfig {
 function parseTrustProxy(value: string | undefined, fallback: number): number {
   const hops = Number(value);
   return value !== undefined && Number.isInteger(hops) && hops >= 0 ? hops : fallback;
+}
+
+// Non-negative number from the env, or the fallback when unset or invalid.
+function parseNonNegative(value: string | undefined, fallback: number): number;
+function parseNonNegative(value: string | undefined, fallback: undefined): number | undefined;
+function parseNonNegative(value: string | undefined, fallback: number | undefined): number | undefined {
+  const parsed = Number(value);
+  return value?.trim() && Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 // Reads a required env var or throws immediately.
@@ -78,8 +99,23 @@ export const env: EnvConfig = {
   certificateSecret: process.env.CERTIFICATE_SECRET ?? "",
   // Number of reverse proxies in front of the app. Heroku sets DYNO and always routes through one proxy.
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY, process.env.DYNO || process.env.NODE_ENV === "production" ? 1 : 0),
-  applicationAmount: 10000,
+  applicationAmount: 2000,
   certificateAmount: 500,
+  // Gateway charges are added on top of the amounts above so the payer bears them
+  processingCharges: {
+    flutterwave: {
+      rate: parseNonNegative(process.env.FLW_CHARGE_PERCENT, 2) / 100,
+      flat: parseNonNegative(process.env.FLW_CHARGE_FLAT, 0),
+      cap: parseNonNegative(process.env.FLW_CHARGE_CAP, 2000),
+      vat: parseNonNegative(process.env.FLW_CHARGE_VAT_PERCENT, 7.5) / 100,
+    },
+    partner: {
+      rate: parseNonNegative(process.env.PARTNER_CHARGE_PERCENT, 0) / 100,
+      flat: parseNonNegative(process.env.PARTNER_CHARGE_FLAT, 15),
+      cap: parseNonNegative(process.env.PARTNER_CHARGE_CAP, undefined),
+      vat: parseNonNegative(process.env.PARTNER_CHARGE_VAT_PERCENT, 0) / 100,
+    },
+  },
   superAdmin: {
     name: process.env.APP_ADMIN_NAME,
     email: process.env.APP_ADMIN_EMAIL,

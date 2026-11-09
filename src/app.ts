@@ -114,7 +114,8 @@ class App {
       partnerTransactionRepository,
       flutterwaveService,
       partnerPaymentService,
-      cryptoService
+      cryptoService,
+      env.processingCharges
     );
     const authService = new AuthService(userRepository, applicationRepository, cryptoService, mailService);
     const adminService = new AdminService(adminRepository, cryptoService, mailService, auditService);
