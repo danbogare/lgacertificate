@@ -30,9 +30,15 @@ export interface IFlutterwaveCheckoutResult {
   paymentLink: string;
 }
 
+export interface IPartnerPayer {
+  firstName: string;
+  lastName: string;
+}
+
 export interface IPartnerCheckoutResult {
-  // The partner identifies the payment by the generated account name
-  paymentRef: string;
+  // The webhook identifies the payment by this account number and name
+  accountNumber: string;
+  accountName: string;
   amount: number;
   paymentData: unknown;
 }
@@ -63,7 +69,7 @@ export type FlutterwaveVerification =
 
 export interface IPaymentService {
   startFlutterwaveCheckout(checkout: IFlutterwaveCheckout): Promise<IFlutterwaveCheckoutResult>;
-  startPartnerCheckout(payerName: string, amount: number): Promise<IPartnerCheckoutResult>;
+  startPartnerCheckout(payer: IPartnerPayer, amount: number): Promise<IPartnerCheckoutResult>;
   recordTransaction(data: Partial<ITransaction>, session?: ClientSession): Promise<ITransaction>;
   recordPartnerTransaction(data: Partial<IPartnerTransaction>, session?: ClientSession): Promise<IPartnerTransaction>;
   verifyFlutterwavePayment(query: IPaymentRedirectQuery): Promise<FlutterwaveVerification>;
@@ -106,12 +112,13 @@ export class PaymentService implements IPaymentService {
     return { transactionRef, amount, paymentLink: response.data?.link };
   }
 
-  public async startPartnerCheckout(payerName: string, baseAmount: number): Promise<IPartnerCheckoutResult> {
+  // The partner names the account after the payer, so each account number is what makes a payment unique
+  public async startPartnerCheckout(payer: IPartnerPayer, baseAmount: number): Promise<IPartnerCheckoutResult> {
     const amount = addProcessingCharges(baseAmount, this.processingCharges.partner);
 
     const response = await this.partnerPaymentService.createDynamicAccount({
-      firstName: payerName,
-      lastName: this.cryptoService.generateTransactionRef(),
+      firstName: payer.firstName,
+      lastName: payer.lastName,
       amount: amount.toString(),
     });
 
@@ -121,7 +128,12 @@ export class PaymentService implements IPaymentService {
     }
 
     const paymentData = response.data?.result?.data;
-    return { paymentRef: paymentData?.accountName, amount, paymentData };
+    if (!paymentData?.accountNumber || !paymentData?.accountName) {
+      console.error("Partner dynamic account response is missing account details:", response);
+      throw new PaymentProviderError();
+    }
+
+    return { accountNumber: paymentData.accountNumber, accountName: paymentData.accountName, amount, paymentData };
   }
 
   public async recordTransaction(data: Partial<ITransaction>, session?: ClientSession): Promise<ITransaction> {

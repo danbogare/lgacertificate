@@ -40,6 +40,14 @@ export class ApplicationRouter {
     );
     this.router.get("/", requireUser, asyncHandler(this.applicationController.getUserApplications));
 
+    // Pay again for an existing application that is still pending_payment
+    this.router.post("/:id/payment", requireUser, asyncHandler(this.applicationController.retryApplicationPayment));
+    this.router.post(
+      "/partner/:id/payment",
+      requireUser,
+      asyncHandler(this.applicationController.retryPartnerApplicationPayment)
+    );
+
     // Flutterwave redirect target, so no auth
     this.router.get("/payment/verify", asyncHandler(this.applicationController.verifyPayment));
   }

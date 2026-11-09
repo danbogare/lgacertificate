@@ -12,6 +12,8 @@ import { getAuditContext } from "../utils/request";
 export interface IApplicationController {
   createApplication: (req: Request, res: Response) => Promise<void>;
   createPartnerApplication: (req: Request, res: Response) => Promise<void>;
+  retryApplicationPayment: (req: Request, res: Response) => Promise<void>;
+  retryPartnerApplicationPayment: (req: Request, res: Response) => Promise<void>;
   verifyPayment: (req: Request, res: Response) => Promise<void>;
   getUserApplications: (req: Request, res: Response) => Promise<void>;
   getPendingApplications: (req: Request, res: Response) => Promise<void>;
@@ -40,6 +42,21 @@ export class ApplicationController implements IApplicationController {
     const uploads = pickUploadedFiles(req.files, APPLICATION_UPLOAD_FIELDS);
 
     const result = await this.applicationService.createPartnerApplication(req.user as IUser, req.body, uploads);
+
+    successResponse(res, "Dynamic partner account created successfully.", result);
+  };
+
+  public retryApplicationPayment = async (req: Request, res: Response): Promise<void> => {
+    const result = await this.applicationService.retryApplicationPayment(req.user as IUser, req.params.id as string);
+
+    successResponse(res, "redirect to payment link", result);
+  };
+
+  public retryPartnerApplicationPayment = async (req: Request, res: Response): Promise<void> => {
+    const result = await this.applicationService.retryPartnerApplicationPayment(
+      req.user as IUser,
+      req.params.id as string
+    );
 
     successResponse(res, "Dynamic partner account created successfully.", result);
   };

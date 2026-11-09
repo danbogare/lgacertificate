@@ -41,6 +41,9 @@ export interface IPartnerConfig {
   apiKey: string;
   merchantId: string;
   webhookSecret: string;
+  // How long a dynamic account stays payable (the partner gives 5 hours), plus extra time for a late webhook
+  paymentWindowMinutes: number;
+  paymentGraceMinutes: number;
 }
 
 interface EnvConfig {
@@ -142,5 +145,7 @@ export const env: EnvConfig = {
     apiKey: process.env.PARTNER_API_KEY ?? "",
     merchantId: process.env.PARTNER_MERCHANT_ID ?? "",
     webhookSecret: process.env.PARTNER_SECRET ?? "",
+    paymentWindowMinutes: parseNonNegative(process.env.PARTNER_PAYMENT_WINDOW_MINUTES, 300),
+    paymentGraceMinutes: parseNonNegative(process.env.PARTNER_PAYMENT_GRACE_MINUTES, 2),
   },
 };

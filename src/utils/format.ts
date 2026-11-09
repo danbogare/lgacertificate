@@ -8,3 +8,9 @@ export const formatDateTimeForFilename = (date: Date): string => {
   const [datePart, timePart = ""] = date.toISOString().replace("Z", "").split("T");
   return `${datePart}_${timePart.split(".")[0]?.replace(/:/g, "-")}`;
 };
+
+// First and last word of a full name; either is empty when the name has fewer than two words
+export const splitFullNames = (fullNames?: string | null): { firstName: string; lastName: string } => {
+  const parts = (fullNames ?? "").trim().split(/\s+/);
+  return { firstName: parts[0] ?? "", lastName: parts.length > 1 ? (parts[parts.length - 1] ?? "") : "" };
+};

@@ -43,7 +43,9 @@ export interface IPartnerTransaction extends Document {
   payerId: Types.ObjectId;
   applicationId?: Types.ObjectId;
   certificateId?: Types.ObjectId;
+  // The dynamic account number. The partner may rotate numbers, so it is only unique among pending payments
   paymentRef: string;
+  accountName?: string;
 
   type: PaymentType;
   amount: string;
@@ -107,8 +109,11 @@ const partnerTransactionSchema = new Schema<IPartnerTransaction>(
 
     paymentRef: {
       type: String,
-      unique: true,
       required: true,
+    },
+
+    accountName: {
+      type: String,
     },
 
     type: {
@@ -151,6 +156,19 @@ const partnerTransactionSchema = new Schema<IPartnerTransaction>(
   },
   {
     timestamps: true,
+  }
+);
+
+// Expiry job: pending transactions by age
+partnerTransactionSchema.index({ status: 1, createdAt: 1 });
+
+// One open payment per account number; a rotated number can be reused once the earlier payment is settled or expired
+partnerTransactionSchema.index(
+  { paymentRef: 1 },
+  {
+    name: "paymentRef_pending_unique",
+    unique: true,
+    partialFilterExpression: { status: PaymentStatus.PENDING },
   }
 );
 

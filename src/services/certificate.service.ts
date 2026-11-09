@@ -19,6 +19,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, Unauthor
 import { getLgaCode, getStateCode } from "../utils/lga-codes";
 import { isIssuingOfficial, isSuperAdmin, officialLgaFilter } from "../utils/admin-scope";
 import { runInTransaction } from "../utils/transaction";
+import { splitFullNames } from "../utils/format";
 
 export interface ICertificateServiceConfig {
   verificationAmount: number;
@@ -127,8 +128,11 @@ export class CertificateService implements ICertificateService {
     const application = await this.applicationRepository.findById(applicationId);
     if (!application) throw new NotFoundError("No application found for user");
 
-    const { paymentRef, amount, paymentData } = await this.paymentService.startPartnerCheckout(
-      application.fullNames,
+    const payer = splitFullNames(application.fullNames);
+    if (!payer.firstName || !payer.lastName) throw new BadRequestError("Invalid full names on application");
+
+    const { accountNumber, accountName, amount, paymentData } = await this.paymentService.startPartnerCheckout(
+      payer,
       this.config.verificationAmount
     );
 
@@ -141,7 +145,8 @@ export class CertificateService implements ICertificateService {
       await this.paymentService.recordPartnerTransaction(
         {
           payerId: user._id as any,
-          paymentRef,
+          paymentRef: accountNumber,
+          accountName,
           amount: amount.toString(),
           transactionType: TransactionType.CERTIFICATE,
           certificateId: certificate._id as any,

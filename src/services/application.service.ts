@@ -1,4 +1,4 @@
-import { FilterQuery } from "mongoose";
+import mongoose, { ClientSession, FilterQuery } from "mongoose";
 import { ApplicationStatus, IApplication } from "../models/application.model";
 import { IUser } from "../models/user.model";
 import { IAdmin } from "../models/admin.model";
@@ -6,7 +6,12 @@ import { TransactionType } from "../models/transaction.model";
 import { IApplicationRepository } from "../repositories/application.repository";
 import { IUserRepository } from "../repositories/user.repository";
 import { ICertificateService } from "./certificate.service";
-import { IPaymentService } from "./payment.service";
+import {
+  IFlutterwaveCheckoutResult,
+  IPartnerCheckoutResult,
+  IPartnerPayer,
+  IPaymentService,
+} from "./payment.service";
 import { ICloudinaryService } from "./storage.service";
 import { IMailService } from "./mail.service";
 import { IAuditService } from "./audit.service";
@@ -24,7 +29,7 @@ import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } fro
 import { HOME_STATE, getLgas, isValidLga, isValidState } from "../utils/states";
 import { getLgaCode } from "../utils/lga-codes";
 import { isIssuingOfficial, isSuperAdmin, lgaApplicationsFilter, officialLgaFilter } from "../utils/admin-scope";
-import { formatDateTimeForFilename, isValidDateFormat, isValidEmail } from "../utils/format";
+import { formatDateTimeForFilename, isValidDateFormat, isValidEmail, splitFullNames } from "../utils/format";
 import { runInTransaction } from "../utils/transaction";
 
 export interface IApplicationServiceConfig {
@@ -55,6 +60,11 @@ export interface IApplicationService {
     payload: ICreateApplicationPayload,
     uploads: IApplicationUploads
   ): Promise<{ applicationId: unknown; paymentData: unknown }>;
+  retryApplicationPayment(user: IUser, applicationId: string): Promise<{ txRef: string; paymentLink: string }>;
+  retryPartnerApplicationPayment(
+    user: IUser,
+    applicationId: string
+  ): Promise<{ applicationId: unknown; paymentData: unknown }>;
   verifyPayment(query: IPaymentRedirectQuery): Promise<PaymentVerificationResult>;
   getUserApplications(user: IUser): Promise<IApplication[]>;
   getApplicationsByStatus(admin: IAdmin, status: ApplicationStatus): Promise<IApplication[]>;
@@ -76,7 +86,7 @@ export interface IApplicationService {
     filters: IApplicationFilters & { email?: unknown },
     context: IAuditContext
   ): Promise<void>;
-  markAsPaid(application: IApplication): void;
+  markAsPaid(application: IApplication): boolean;
 }
 
 const OGUN_ORIGIN_FIELDS = [
@@ -115,70 +125,66 @@ export class ApplicationService implements IApplicationService {
     const validated = await this.validateNewApplication(payload, uploads);
     const files = await this.uploadApplicationFiles(validated);
 
-    const { transactionRef, amount, paymentLink } = await this.paymentService.startFlutterwaveCheckout({
-      amount: this.config.applicationAmount,
-      redirectUrl: `${this.config.apiUrl}/api/v1/application/payment/verify`,
-      title: "LGA Certificate Application Payment",
-      customer: { email: user.email, name: payload.fullNames, phone: user.phone },
-    });
+    const checkout = await this.startFlutterwaveCheckout(user, payload.fullNames);
 
     await runInTransaction(async (session) => {
       const application = await this.applicationRepository.create(
-        { ...this.buildApplication(user, payload, validated, files), pendingPaymentLink: paymentLink },
+        { ...this.buildApplication(user, payload, validated, files), pendingPaymentLink: checkout.paymentLink },
         session
       );
-
-      await this.paymentService.recordTransaction(
-        {
-          transactionRef,
-          amount: amount.toString(),
-          transactionType: TransactionType.APPLICATION,
-          user: user._id as any,
-          application: application._id as any,
-        },
-        session
-      );
+      await this.recordFlutterwaveTransaction(user, application, checkout, session);
     });
 
-    return { txRef: transactionRef, paymentLink };
+    return { txRef: checkout.transactionRef, paymentLink: checkout.paymentLink };
   }
 
   // Same as createApplication, but paid by bank transfer to a partner-issued account
   public async createPartnerApplication(user: IUser, payload: ICreateApplicationPayload, uploads: IApplicationUploads) {
-    const parts = (payload.fullNames ?? "").trim().split(/\s+/);
-    const firstName = parts[0] ?? "";
-    const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
-    if (!firstName || !lastName) throw new BadRequestError("Invalid full names");
-
+    const payer = this.getPartnerPayer(payload.fullNames);
     const validated = await this.validateNewApplication(payload, uploads);
     const files = await this.uploadApplicationFiles(validated);
 
-    const { paymentRef, amount, paymentData } = await this.paymentService.startPartnerCheckout(
-      payload.fullNames,
-      this.config.applicationAmount
-    );
+    const checkout = await this.paymentService.startPartnerCheckout(payer, this.config.applicationAmount);
 
     const application = await runInTransaction(async (session) => {
       const application = await this.applicationRepository.create(
         { ...this.buildApplication(user, payload, validated, files), pendingPaymentLink: null },
         session
       );
-
-      await this.paymentService.recordPartnerTransaction(
-        {
-          payerId: user._id as any,
-          paymentRef,
-          amount: amount.toString(),
-          transactionType: TransactionType.APPLICATION,
-          applicationId: application._id as any,
-        },
-        session
-      );
-
+      await this.recordPartnerTransaction(user, application, checkout, session);
       return application;
     });
 
-    return { applicationId: application._id, paymentData };
+    return { applicationId: application._id, paymentData: checkout.paymentData };
+  }
+
+  // Lets the applicant pay again for an application whose earlier payment was abandoned or expired
+  public async retryApplicationPayment(user: IUser, applicationId: string) {
+    const application = await this.findUnpaidApplication(user, applicationId);
+    const checkout = await this.startFlutterwaveCheckout(user, application.fullNames);
+
+    await runInTransaction(async (session) => {
+      application.pendingPaymentLink = checkout.paymentLink;
+      await this.applicationRepository.save(application, session);
+      await this.recordFlutterwaveTransaction(user, application, checkout, session);
+    });
+
+    return { txRef: checkout.transactionRef, paymentLink: checkout.paymentLink };
+  }
+
+  public async retryPartnerApplicationPayment(user: IUser, applicationId: string) {
+    const application = await this.findUnpaidApplication(user, applicationId);
+    const payer = this.getPartnerPayer(application.fullNames);
+
+    const checkout = await this.paymentService.startPartnerCheckout(payer, this.config.applicationAmount);
+
+    await runInTransaction(async (session) => {
+      application.pendingPaymentLink = null;
+      await this.applicationRepository.save(application, session);
+      await this.recordPartnerTransaction(user, application, checkout, session);
+    });
+
+    return { applicationId: application._id, paymentData: checkout.paymentData };
   }
 
   public async verifyPayment(query: IPaymentRedirectQuery): Promise<PaymentVerificationResult> {
@@ -408,11 +414,81 @@ export class ApplicationService implements IApplicationService {
     );
   }
 
-  // Payment received: the application moves to the officials' review queue
-  public markAsPaid(application: IApplication): void {
+  // Payment received: the application moves to the officials' review queue. Returns false when it was
+  // already paid, so a second payment (e.g. an old account paid late) never reopens a reviewed application.
+  public markAsPaid(application: IApplication): boolean {
+    if (application.status !== ApplicationStatus.PENDING_PAYMENT) return false;
+
     application.status = ApplicationStatus.PENDING;
     application.pendingApprovalRejectionDate = new Date();
     application.pendingPaymentLink = null;
+    return true;
+  }
+
+  private async findUnpaidApplication(user: IUser, applicationId: string): Promise<IApplication> {
+    if (!mongoose.isValidObjectId(applicationId)) throw new BadRequestError("Invalid application id");
+
+    const application = await this.applicationRepository.findById(applicationId);
+    if (!application || application.user.toString() !== String(user._id)) {
+      throw new NotFoundError("application not found");
+    }
+    if (application.status !== ApplicationStatus.PENDING_PAYMENT) {
+      throw new BadRequestError("application has already been paid for");
+    }
+    return application;
+  }
+
+  // The partner names the dynamic account after the payer, so both names are required
+  private getPartnerPayer(fullNames?: string | null): IPartnerPayer {
+    const payer = splitFullNames(fullNames);
+    if (!payer.firstName || !payer.lastName) throw new BadRequestError("Invalid full names");
+    return payer;
+  }
+
+  private async startFlutterwaveCheckout(user: IUser, fullNames: string): Promise<IFlutterwaveCheckoutResult> {
+    return await this.paymentService.startFlutterwaveCheckout({
+      amount: this.config.applicationAmount,
+      redirectUrl: `${this.config.apiUrl}/api/v1/application/payment/verify`,
+      title: "LGA Certificate Application Payment",
+      customer: { email: user.email, name: fullNames, phone: user.phone },
+    });
+  }
+
+  private async recordFlutterwaveTransaction(
+    user: IUser,
+    application: IApplication,
+    checkout: IFlutterwaveCheckoutResult,
+    session: ClientSession
+  ): Promise<void> {
+    await this.paymentService.recordTransaction(
+      {
+        transactionRef: checkout.transactionRef,
+        amount: checkout.amount.toString(),
+        transactionType: TransactionType.APPLICATION,
+        user: user._id as any,
+        application: application._id as any,
+      },
+      session
+    );
+  }
+
+  private async recordPartnerTransaction(
+    user: IUser,
+    application: IApplication,
+    checkout: IPartnerCheckoutResult,
+    session: ClientSession
+  ): Promise<void> {
+    await this.paymentService.recordPartnerTransaction(
+      {
+        payerId: user._id as any,
+        paymentRef: checkout.accountNumber,
+        accountName: checkout.accountName,
+        amount: checkout.amount.toString(),
+        transactionType: TransactionType.APPLICATION,
+        applicationId: application._id as any,
+      },
+      session
+    );
   }
 
   // Checks run in the same order applicants have always seen the errors

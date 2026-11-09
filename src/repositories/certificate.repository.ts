@@ -21,6 +21,7 @@ export interface ICertificateRepository {
   findByApplications(applicationIds: Types.ObjectId[]): Promise<unknown[]>;
   create(data: Partial<ICertificate>, session?: ClientSession): Promise<ICertificate>;
   save(certificate: ICertificate, session?: ClientSession): Promise<ICertificate>;
+  clearPendingVerificationPayment(ids: Types.ObjectId[]): Promise<void>;
 }
 
 export class CertificateRepository implements ICertificateRepository {
@@ -99,5 +100,14 @@ export class CertificateRepository implements ICertificateRepository {
 
   public async save(certificate: ICertificate, session?: ClientSession): Promise<ICertificate> {
     return await certificate.save({ session });
+  }
+
+  public async clearPendingVerificationPayment(ids: Types.ObjectId[]): Promise<void> {
+    await this.certificateModel
+      .updateMany(
+        { _id: { $in: ids }, isVerificationCodeGenerated: { $ne: true } },
+        { $set: { isVerificationPaymentPending: false } }
+      )
+      .exec();
   }
 }
