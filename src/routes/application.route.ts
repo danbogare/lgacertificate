@@ -39,6 +39,7 @@ export class ApplicationRouter {
       asyncHandler(this.applicationController.createPartnerApplication)
     );
     this.router.get("/", requireUser, asyncHandler(this.applicationController.getUserApplications));
+    this.router.get("/:id", requireUser, asyncHandler(this.applicationController.getUserApplication));
 
     // Pay again for an existing application that is still pending_payment
     this.router.post("/:id/payment", requireUser, asyncHandler(this.applicationController.retryApplicationPayment));

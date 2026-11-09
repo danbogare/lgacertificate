@@ -4,14 +4,17 @@ import { IApplicationSummary } from "../interfaces/application.interface";
 
 export interface IApplicationQueryOptions {
   populateUser?: boolean;
+  // Admin fields to load for approvedBy and rejectedBy; left as ids when unset
+  reviewerFields?: string;
   skip?: number;
   limit?: number;
 }
 
 export interface IApplicationRepository {
   findById(id: unknown): Promise<IApplication | null>;
+  findByIdWithReviewers(id: string, reviewerFields: string, populateUser?: boolean): Promise<IApplication | null>;
   findAwaitingReviewByNin(nin: string): Promise<IApplication | null>;
-  findByUser(userId: unknown): Promise<IApplication[]>;
+  findByUser(userId: unknown, reviewerFields: string): Promise<IApplication[]>;
   countByUserAndStatus(userId: unknown, status: ApplicationStatus): Promise<number>;
   find(filter: FilterQuery<IApplication>, options?: IApplicationQueryOptions): Promise<IApplication[]>;
   count(filter: FilterQuery<IApplication>): Promise<number>;
@@ -33,12 +36,32 @@ export class ApplicationRepository implements IApplicationRepository {
     return await this.applicationModel.findById(id).exec();
   }
 
+  public async findByIdWithReviewers(
+    id: string,
+    reviewerFields: string,
+    populateUser = false
+  ): Promise<IApplication | null> {
+    const query = this.applicationModel.findById(id).populate([
+      { path: "approvedBy", select: reviewerFields },
+      { path: "rejectedBy", select: reviewerFields },
+    ]);
+    if (populateUser) query.populate("user", "firstName lastName email");
+    return await query.exec();
+  }
+
   public async findAwaitingReviewByNin(nin: string): Promise<IApplication | null> {
     return await this.applicationModel.findOne({ nin, status: ApplicationStatus.PENDING }).exec();
   }
 
-  public async findByUser(userId: unknown): Promise<IApplication[]> {
-    return await this.applicationModel.find({ user: userId }).sort({ createdAt: -1 }).exec();
+  public async findByUser(userId: unknown, reviewerFields: string): Promise<IApplication[]> {
+    return await this.applicationModel
+      .find({ user: userId })
+      .sort({ createdAt: -1 })
+      .populate([
+        { path: "approvedBy", select: reviewerFields },
+        { path: "rejectedBy", select: reviewerFields },
+      ])
+      .exec();
   }
 
   public async countByUserAndStatus(userId: unknown, status: ApplicationStatus): Promise<number> {
@@ -50,6 +73,12 @@ export class ApplicationRepository implements IApplicationRepository {
     if (options.skip !== undefined) query.skip(options.skip);
     if (options.limit !== undefined) query.limit(options.limit);
     if (options.populateUser) query.populate("user", "firstName lastName email");
+    if (options.reviewerFields) {
+      query.populate([
+        { path: "approvedBy", select: options.reviewerFields },
+        { path: "rejectedBy", select: options.reviewerFields },
+      ]);
+    }
     return await query.exec();
   }
 

@@ -17,7 +17,7 @@ import { AuditAction, AuditTargetType } from "../models/auditLog.model";
 import { IPaymentRedirectQuery, PaymentVerificationResult } from "../interfaces/payment.interface";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../errors/error";
 import { getLgaCode, getStateCode } from "../utils/lga-codes";
-import { isIssuingOfficial, isSuperAdmin, officialLgaFilter } from "../utils/admin-scope";
+import { isIssuingOfficial, isSuperAdmin, officialLgaFilter, reviewerFieldsFor } from "../utils/admin-scope";
 import { runInTransaction } from "../utils/transaction";
 import { splitFullNames } from "../utils/format";
 
@@ -215,13 +215,17 @@ export class CertificateService implements ICertificateService {
   }
 
   public async getUserCertificates(user: IUser): Promise<unknown[]> {
-    return await this.certificateRepository.findByUser(user._id);
+    return await this.certificateRepository.findByUser(user._id, reviewerFieldsFor());
   }
 
   public async getCertificateByApplicationId(user: IUser, applicationId: string): Promise<unknown> {
     if (!mongoose.Types.ObjectId.isValid(applicationId)) throw new BadRequestError("Invalid application id");
 
-    const certificate = await this.certificateRepository.findByApplicationForUser(applicationId, user._id);
+    const certificate = await this.certificateRepository.findByApplicationForUser(
+      applicationId,
+      user._id,
+      reviewerFieldsFor()
+    );
     if (certificate) return certificate;
 
     // GET /certificate/:id shares this path, so the id may also be a certificate id
@@ -300,7 +304,7 @@ export class CertificateService implements ICertificateService {
     }
 
     const applicationIds = await this.applicationRepository.findIds(filter);
-    return await this.certificateRepository.findByApplications(applicationIds);
+    return await this.certificateRepository.findByApplications(applicationIds, reviewerFieldsFor(admin));
   }
 
   // Owners, the super admin and officials of the issuing LGA can view a certificate
@@ -310,7 +314,7 @@ export class CertificateService implements ICertificateService {
 
     if (!mongoose.isValidObjectId(id)) throw new BadRequestError("Invalid certificate id");
 
-    const certificate = await this.certificateRepository.findByIdForView(id);
+    const certificate = await this.certificateRepository.findByIdForView(id, reviewerFieldsFor(viewer.admin));
     if (!certificate) throw new NotFoundError("Certificate not found");
 
     const application = certificate.application as IApplication | null;
@@ -324,12 +328,6 @@ export class CertificateService implements ICertificateService {
       isIssuingOfficial(viewer.admin, application);
 
     if (!isOwner && !isSuper && !isLgaAdmin) throw new ForbiddenError();
-
-    // Only officials see the revoking official's contact details
-    if (!isSuper && !isLgaAdmin && certificate.revokedBy) {
-      const { email, phone, ...safeRevokedBy } = certificate.revokedBy;
-      return { ...certificate, revokedBy: safeRevokedBy };
-    }
 
     return certificate;
   }

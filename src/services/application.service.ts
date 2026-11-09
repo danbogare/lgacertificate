@@ -28,7 +28,13 @@ import { IPaymentRedirectQuery, PaymentVerificationResult } from "../interfaces/
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "../errors/error";
 import { HOME_STATE, getLgas, isValidLga, isValidState } from "../utils/states";
 import { getLgaCode } from "../utils/lga-codes";
-import { isIssuingOfficial, isSuperAdmin, lgaApplicationsFilter, officialLgaFilter } from "../utils/admin-scope";
+import {
+  isIssuingOfficial,
+  isSuperAdmin,
+  lgaApplicationsFilter,
+  officialLgaFilter,
+  reviewerFieldsFor,
+} from "../utils/admin-scope";
 import { formatDateTimeForFilename, isValidDateFormat, isValidEmail, splitFullNames } from "../utils/format";
 import { runInTransaction } from "../utils/transaction";
 
@@ -67,6 +73,8 @@ export interface IApplicationService {
   ): Promise<{ applicationId: unknown; paymentData: unknown }>;
   verifyPayment(query: IPaymentRedirectQuery): Promise<PaymentVerificationResult>;
   getUserApplications(user: IUser): Promise<IApplication[]>;
+  getUserApplication(user: IUser, applicationId: string): Promise<IApplication>;
+  getApplicationForAdmin(admin: IAdmin, applicationId: string): Promise<IApplication>;
   getApplicationsByStatus(admin: IAdmin, status: ApplicationStatus): Promise<IApplication[]>;
   reviewApplication(
     admin: IAdmin,
@@ -219,7 +227,32 @@ export class ApplicationService implements IApplicationService {
   }
 
   public async getUserApplications(user: IUser): Promise<IApplication[]> {
-    return await this.applicationRepository.findByUser(user._id);
+    return await this.applicationRepository.findByUser(user._id, reviewerFieldsFor());
+  }
+
+  public async getUserApplication(user: IUser, applicationId: string): Promise<IApplication> {
+    if (!mongoose.isValidObjectId(applicationId)) throw new BadRequestError("Invalid application id");
+
+    const application = await this.applicationRepository.findByIdWithReviewers(applicationId, reviewerFieldsFor());
+    // Other people's applications look the same as missing ones
+    if (!application || application.user.toString() !== String(user._id)) {
+      throw new NotFoundError("application not found");
+    }
+    return application;
+  }
+
+  // Officials can only open applications for their own LGA
+  public async getApplicationForAdmin(admin: IAdmin, applicationId: string): Promise<IApplication> {
+    if (!mongoose.isValidObjectId(applicationId)) throw new BadRequestError("Invalid application id");
+
+    const application = await this.applicationRepository.findByIdWithReviewers(
+      applicationId,
+      reviewerFieldsFor(admin),
+      true
+    );
+    if (!application) throw new NotFoundError("application not found");
+    if (!isSuperAdmin(admin) && !isIssuingOfficial(admin, application)) throw new ForbiddenError();
+    return application;
   }
 
   public async getApplicationsByStatus(admin: IAdmin, status: ApplicationStatus): Promise<IApplication[]> {
@@ -229,6 +262,7 @@ export class ApplicationService implements IApplicationService {
 
     return await this.applicationRepository.find(filter, {
       populateUser: status === ApplicationStatus.APPROVED,
+      reviewerFields: reviewerFieldsFor(admin),
     });
   }
 
@@ -348,9 +382,13 @@ export class ApplicationService implements IApplicationService {
     if (name) {
       const filter: FilterQuery<IApplication> = {
         ...this.scopeFilter(admin, query),
+        status: { $ne: ApplicationStatus.PENDING_PAYMENT },
         fullNames: { $regex: name, $options: "i" },
       };
-      const applications = await this.applicationRepository.find(filter, { populateUser: true });
+      const applications = await this.applicationRepository.find(filter, {
+        populateUser: true,
+        reviewerFields: reviewerFieldsFor(admin),
+      });
       if (!applications.length) throw new NotFoundError("Not Found");
       return applications;
     }
@@ -359,7 +397,12 @@ export class ApplicationService implements IApplicationService {
     const skip = (Number(page) - 1) * Number(limit);
 
     const [applications, total] = await Promise.all([
-      this.applicationRepository.find(filter, { populateUser: true, skip, limit: Number(limit) }),
+      this.applicationRepository.find(filter, {
+        populateUser: true,
+        reviewerFields: reviewerFieldsFor(admin),
+        skip,
+        limit: Number(limit),
+      }),
       this.applicationRepository.count(filter),
     ]);
 
@@ -613,6 +656,9 @@ export class ApplicationService implements IApplicationService {
         throw new BadRequestError("Invalid application status");
       }
       filter.status = status as ApplicationStatus;
+    } else {
+      // Unpaid applications are left out unless asked for explicitly
+      filter.status = { $ne: ApplicationStatus.PENDING_PAYMENT };
     }
 
     if (startDate || endDate) {

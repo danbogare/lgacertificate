@@ -49,6 +49,7 @@ export class AdminRouter {
       validate(rejectionReasonSchema),
       asyncHandler(this.applicationController.reviewApplication)
     );
+    this.router.get("/application/:id", requireAdmin, asyncHandler(this.applicationController.getApplicationForAdmin));
     this.router.get("/applications", requireAdmin, asyncHandler(this.applicationController.getFilteredApplications));
     this.router.get(
       "/applications/pending",

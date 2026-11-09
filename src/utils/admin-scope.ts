@@ -19,3 +19,14 @@ export const lgaApplicationsFilter = (state: string, lga?: string): FilterQuery<
 // Limits application queries to the official's LGA
 export const officialLgaFilter = (admin: IAdmin): FilterQuery<IApplication> =>
   lgaApplicationsFilter(admin.stateOfOrigin, admin.lga);
+
+// Details shown for the official who approved, rejected or revoked a record. The super admin sees the
+// full staff record, other officials also see the role, and applicants only see name, position and LGA.
+const REVIEWER_FIELDS_FOR_SUPER_ADMIN = "firstName lastName email phone position staffID role lga stateOfOrigin";
+const REVIEWER_FIELDS_FOR_OFFICIAL = "firstName lastName position lga role";
+const REVIEWER_FIELDS_FOR_APPLICANT = "firstName lastName position lga";
+
+export const reviewerFieldsFor = (admin?: IAdmin): string => {
+  if (!admin) return REVIEWER_FIELDS_FOR_APPLICANT;
+  return isSuperAdmin(admin) ? REVIEWER_FIELDS_FOR_SUPER_ADMIN : REVIEWER_FIELDS_FOR_OFFICIAL;
+};

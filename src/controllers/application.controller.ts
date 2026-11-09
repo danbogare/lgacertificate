@@ -16,6 +16,8 @@ export interface IApplicationController {
   retryPartnerApplicationPayment: (req: Request, res: Response) => Promise<void>;
   verifyPayment: (req: Request, res: Response) => Promise<void>;
   getUserApplications: (req: Request, res: Response) => Promise<void>;
+  getUserApplication: (req: Request, res: Response) => Promise<void>;
+  getApplicationForAdmin: (req: Request, res: Response) => Promise<void>;
   getPendingApplications: (req: Request, res: Response) => Promise<void>;
   getApprovedApplications: (req: Request, res: Response) => Promise<void>;
   getRejectedApplications: (req: Request, res: Response) => Promise<void>;
@@ -77,6 +79,21 @@ export class ApplicationController implements IApplicationController {
     const applications = await this.applicationService.getUserApplications(req.user as IUser);
 
     successResponse(res, "applications retrieved successfully", { applications });
+  };
+
+  public getUserApplication = async (req: Request, res: Response): Promise<void> => {
+    const application = await this.applicationService.getUserApplication(req.user as IUser, req.params.id as string);
+
+    successResponse(res, "application retrieved successfully", { application });
+  };
+
+  public getApplicationForAdmin = async (req: Request, res: Response): Promise<void> => {
+    const application = await this.applicationService.getApplicationForAdmin(
+      req.admin as IAdmin,
+      req.params.id as string
+    );
+
+    successResponse(res, "application retrieved successfully", { application });
   };
 
   public getPendingApplications = async (req: Request, res: Response): Promise<void> => {

@@ -6,19 +6,29 @@ import { IApplication } from "../models/application.model";
 const APPLICATION_PUBLIC_FIELDS =
   "-pendingPaymentLink -passportPublicId -docFromCommunityHeadPublicId -pendingApprovalRejectionDate";
 
+// The application with the official who approved it, plus the official who revoked the certificate
+const withReviewers = (reviewerFields: string) => [
+  {
+    path: "application",
+    select: APPLICATION_PUBLIC_FIELDS,
+    populate: { path: "approvedBy", select: reviewerFields },
+  },
+  { path: "revokedBy", select: reviewerFields },
+];
+
 export type CertificateWithApplication = Omit<ICertificate, "application"> & { application: IApplication };
 
 export interface ICertificateRepository {
   findById(id: unknown): Promise<ICertificate | null>;
   findByIdWithApplication(id: string): Promise<CertificateWithApplication | null>;
-  findByIdForView(id: string): Promise<any | null>;
+  findByIdForView(id: string, reviewerFields: string): Promise<any | null>;
   findByUserAndApplication(userId: unknown, applicationId: string): Promise<ICertificate | null>;
   findByRef(certificateRef: string): Promise<ICertificate | null>;
   findByRefWithDetails(certificateRef: string): Promise<ICertificate | null>;
   findByHashWithDetails(certificateHash: string): Promise<ICertificate | null>;
-  findByUser(userId: unknown): Promise<unknown[]>;
-  findByApplicationForUser(applicationId: string, userId: unknown): Promise<unknown | null>;
-  findByApplications(applicationIds: Types.ObjectId[]): Promise<unknown[]>;
+  findByUser(userId: unknown, reviewerFields: string): Promise<unknown[]>;
+  findByApplicationForUser(applicationId: string, userId: unknown, reviewerFields: string): Promise<unknown | null>;
+  findByApplications(applicationIds: Types.ObjectId[], reviewerFields: string): Promise<unknown[]>;
   create(data: Partial<ICertificate>, session?: ClientSession): Promise<ICertificate>;
   save(certificate: ICertificate, session?: ClientSession): Promise<ICertificate>;
   clearPendingVerificationPayment(ids: Types.ObjectId[]): Promise<void>;
@@ -38,13 +48,8 @@ export class CertificateRepository implements ICertificateRepository {
       .exec()) as CertificateWithApplication | null;
   }
 
-  public async findByIdForView(id: string): Promise<any | null> {
-    return await this.certificateModel
-      .findById(id)
-      .populate({ path: "application", select: APPLICATION_PUBLIC_FIELDS })
-      .populate({ path: "revokedBy", select: "firstName middleName lastName email phone stateOfOrigin" })
-      .lean()
-      .exec();
+  public async findByIdForView(id: string, reviewerFields: string): Promise<any | null> {
+    return await this.certificateModel.findById(id).populate(withReviewers(reviewerFields)).lean().exec();
   }
 
   public async findByUserAndApplication(userId: unknown, applicationId: string): Promise<ICertificate | null> {
@@ -67,28 +72,32 @@ export class CertificateRepository implements ICertificateRepository {
     return await this.certificateModel.findOne({ certificateHash }).populate("application").populate("user").exec();
   }
 
-  public async findByUser(userId: unknown): Promise<unknown[]> {
+  public async findByUser(userId: unknown, reviewerFields: string): Promise<unknown[]> {
     return await this.certificateModel
       .find({ user: userId })
-      .populate({ path: "application", select: APPLICATION_PUBLIC_FIELDS })
+      .populate(withReviewers(reviewerFields))
       .sort({ createdAt: -1 })
       .lean()
       .exec();
   }
 
-  public async findByApplicationForUser(applicationId: string, userId: unknown): Promise<unknown | null> {
+  public async findByApplicationForUser(
+    applicationId: string,
+    userId: unknown,
+    reviewerFields: string
+  ): Promise<unknown | null> {
     return await this.certificateModel
       .findOne({ application: applicationId, user: userId })
-      .populate({ path: "application", select: APPLICATION_PUBLIC_FIELDS })
+      .populate(withReviewers(reviewerFields))
       .lean()
       .exec();
   }
 
-  public async findByApplications(applicationIds: Types.ObjectId[]): Promise<unknown[]> {
+  public async findByApplications(applicationIds: Types.ObjectId[], reviewerFields: string): Promise<unknown[]> {
     return await this.certificateModel
       .find({ application: { $in: applicationIds } })
       .sort({ createdAt: -1 })
-      .populate({ path: "application", select: APPLICATION_PUBLIC_FIELDS })
+      .populate(withReviewers(reviewerFields))
       .lean()
       .exec();
   }
