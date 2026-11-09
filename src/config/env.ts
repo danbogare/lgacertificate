@@ -16,6 +16,14 @@ export interface ISMTPConfig {
   fromName: string;
 }
 
+export interface ISmtp2goConfig {
+  apiKey: string;
+  apiUrl: string;
+  // Must be a sender verified on the SMTP2GO account
+  senderEmail: string;
+  fromName: string;
+}
+
 export interface ICloudinaryConfig {
   cloudName: string;
   apiKey: string;
@@ -63,6 +71,7 @@ interface EnvConfig {
   };
   superAdmin: ISuperAdminSeedConfig;
   smtp: ISMTPConfig;
+  smtp2go: ISmtp2goConfig;
   cloudinary: ICloudinaryConfig;
   flutterwave: IFlutterwaveConfig;
   partner: IPartnerConfig;
@@ -131,6 +140,13 @@ export const env: EnvConfig = {
     pass: process.env.SMTP_PASSWORD ?? "",
     fromName: process.env.SMTP_FROM_NAME ?? "",
   },
+  // Preferred over SMTP whenever the API key is set
+  smtp2go: {
+    apiKey: process.env.SMTP2GO_KEY ?? "",
+    apiUrl: process.env.SMTP2GO_API_URL || "https://api.smtp2go.com/v3",
+    senderEmail: process.env.SMTP2GO_SENDER_EMAIL || process.env.SMTP_USER_EMAIL || "",
+    fromName: process.env.SMTP_FROM_NAME ?? "",
+  },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
     apiKey: process.env.CLOUDINARY_API_KEY ?? "",
@@ -144,7 +160,7 @@ export const env: EnvConfig = {
     baseUrl: process.env.PARTNER_BASE_URL ?? "",
     apiKey: process.env.PARTNER_API_KEY ?? "",
     merchantId: process.env.PARTNER_MERCHANT_ID ?? "",
-    webhookSecret: process.env.PARTNER_SECRET ?? "",
+    webhookSecret: process.env.PARTNER_API_SECRET ?? "",
     paymentWindowMinutes: parseNonNegative(process.env.PARTNER_PAYMENT_WINDOW_MINUTES, 300),
     paymentGraceMinutes: parseNonNegative(process.env.PARTNER_PAYMENT_GRACE_MINUTES, 2),
   },

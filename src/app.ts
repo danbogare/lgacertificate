@@ -104,7 +104,7 @@ class App {
     // services
     const auditService = new AuditService(auditLogRepository);
     const cryptoService = new CryptoService(env.jwtSecret, env.certificateSecret);
-    const mailService = new MailService(env.smtp);
+    const mailService = new MailService(env.smtp, env.smtp2go);
     const storageService = new CloudinaryService(env.cloudinary);
     const httpClient = new HttpClient(requestDumpRepository);
     const flutterwaveService = new FlutterwaveService(httpClient, env.flutterwave);
