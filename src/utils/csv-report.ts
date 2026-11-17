@@ -1,6 +1,21 @@
 import { IApplication } from "../models/application.model";
 import { format } from "fast-csv";
 import { Writable } from "stream";
+import { IAdmin } from "../models/admin.model";
+
+// approvedBy/rejectedBy are only admin documents when the query populated them
+function formatReviewer(reviewer: unknown): string {
+    if (!reviewer || typeof reviewer !== "object" || !("firstName" in reviewer)) return "N/A";
+    const { firstName, lastName, position } = reviewer as IAdmin;
+    const name = `${firstName} ${lastName}`;
+    return position ? `${name} (${position})` : name;
+}
+
+// Only super admins' reviewer lookups select email; officials' leave it out
+function reviewerEmail(reviewer: unknown): string {
+    if (!reviewer || typeof reviewer !== "object") return "N/A";
+    return (reviewer as IAdmin).email || "N/A";
+}
 
 export async function generateApplicationReportCsv(data: IApplication[]): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
@@ -37,6 +52,10 @@ export async function generateApplicationReportCsv(data: IApplication[]): Promis
                 "Is Resident of Ogun?": application.isResidentOfOgun ? "Yes" : "No",
                 "LGA of Resident": application.lgaOfResident || "N/A",
                 "Application Status": application.status,
+                "Approved By": formatReviewer(application.approvedBy),
+                "Approved By Email": reviewerEmail(application.approvedBy),
+                "Rejected By": formatReviewer(application.rejectedBy),
+                "Rejected By Email": reviewerEmail(application.rejectedBy),
                 "Approval/Rejection Date": application.pendingApprovalRejectionDate
                     ? application.pendingApprovalRejectionDate.toISOString().split("T")[0]
                     : "N/A",

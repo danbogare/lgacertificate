@@ -428,7 +428,10 @@ export class ApplicationService implements IApplicationService {
     if (typeof email !== "string" || !isValidEmail(email)) throw new BadRequestError("Invalid email address");
 
     const filter = this.buildReportFilter(admin, filters);
-    const applications = await this.applicationRepository.find(filter, { populateUser: true });
+    const applications = await this.applicationRepository.find(filter, {
+      populateUser: true,
+      reviewerFields: reviewerFieldsFor(admin),
+    });
 
     this.mailService.sendApplicationReportEmail(
       email,
