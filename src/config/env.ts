@@ -32,6 +32,8 @@ export interface IPartnerConfig {
   apiKey: string;
   merchantId: string;
   webhookSecret: string;
+  webhookIps: string[];
+  accountTtlMinutes: number;
 }
 
 interface EnvConfig {
@@ -106,5 +108,10 @@ export const env: EnvConfig = {
     apiKey: process.env.PARTNER_API_KEY ?? "",
     merchantId: process.env.PARTNER_MERCHANT_ID ?? "",
     webhookSecret: process.env.PARTNER_SECRET ?? "",
+    webhookIps: (process.env.PARTNER_WEBHOOK_IPS ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean),
+    accountTtlMinutes: Number(process.env.PARTNER_ACCOUNT_TTL_MINUTES ?? 1440),
   },
 };

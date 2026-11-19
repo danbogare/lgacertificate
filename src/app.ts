@@ -38,6 +38,9 @@ import { SignatoryService } from "./services/signatory.service";
 import { LocationService } from "./services/location.service";
 import { WebhookService } from "./services/webhook.service";
 import { AuditService } from "./services/audit.service";
+import { createRateLimiter } from "./middlewares/rate-limit.middleware";
+import { BotProtectionMiddleware } from "./middlewares/bot-protection.middleware";
+import { requireHttps } from "./middlewares/require-https.middleware";
 import { AuthController } from "./controllers/auth.controller";
 import { AdminController } from "./controllers/admin.controller";
 import { ApplicationController } from "./controllers/application.controller";
@@ -55,6 +58,7 @@ import { LocationRouter } from "./routes/location.route";
 import { PartnerRouter } from "./routes/partner.route";
 
 const API_PREFIX = "/api/v1";
+const apiRateLimiter = createRateLimiter({ windowMs: 60_000, max: 300 });
 
 class App {
   public readonly instance: Application;
@@ -74,14 +78,40 @@ class App {
     // Lets req.ip reflect the real client behind a load balancer, which audit logs record
     this.instance.set("trust proxy", env.trustProxy);
     this.instance.use(cors());
+    // Never serve plaintext in production; redirect and set HSTS
+    this.instance.use(requireHttps);
+    // Block known AI agents/crawlers from scraping the API
+    this.instance.use(new BotProtectionMiddleware().blockAICrawlers);
     // The raw body is kept for verifying partner webhook signatures
     this.instance.use(express.json({ verify: rawBodySaver }));
     this.instance.use(express.urlencoded({ extended: true }));
+    this.instance.use(API_PREFIX, apiRateLimiter);
   }
 
   private initializeBaseRoutes(): void {
     this.instance.get("/", (_req: Request, res: Response) => {
       res.status(200).json({ message: "Welcome to LGA Certificate Server" });
+    });
+
+    this.instance.get("/robots.txt", (_req: Request, res: Response) => {
+      res.type("text/plain").send(
+        "User-agent: *\n" +
+          "Disallow: /api/\n" +
+          "Disallow: /partner\n" +
+          "Allow: /api/v1/auth\n" +
+          "Allow: /api/v1/location\n\n" +
+          "# AI agents and crawlers are not permitted to scrape this service\n" +
+          "User-agent: GPTBot\n" +
+          "Disallow: /\n" +
+          "User-agent: ChatGPT-User\n" +
+          "Disallow: /\n" +
+          "User-agent: anthropic-ai\n" +
+          "Disallow: /\n" +
+          "User-agent: PerplexityBot\n" +
+          "Disallow: /\n" +
+          "User-agent: Google-Extended\n" +
+          "Disallow: /\n"
+      );
     });
   }
 
@@ -110,7 +140,8 @@ class App {
       partnerTransactionRepository,
       flutterwaveService,
       partnerPaymentService,
-      cryptoService
+      cryptoService,
+      env.partner.accountTtlMinutes
     );
     const authService = new AuthService(userRepository, applicationRepository, cryptoService, mailService);
     const adminService = new AdminService(adminRepository, cryptoService, mailService, auditService);
@@ -142,7 +173,8 @@ class App {
       applicationRepository,
       certificateRepository,
       applicationService,
-      certificateService
+      certificateService,
+      partnerPaymentService
     );
 
     // middlewares

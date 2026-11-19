@@ -2,8 +2,11 @@ import App from "./app";
 import { env } from "./config/env";
 import { dbManager } from "./config/database";
 import { Admin } from "./models/admin.model";
+import { PartnerTransaction } from "./models/partnerTransaction.model";
 import { AdminRepository } from "./repositories/admin.repository";
 import { CryptoService } from "./services/crypto.service";
+import { PartnerTransactionRepository } from "./repositories/partnerTransaction.repository";
+import { PartnerExpirationService } from "./services/partner-expiration.service";
 import { seedSuperAdmin } from "./seeders/super-admin.seeder";
 
 async function bootstrap() {
@@ -22,6 +25,13 @@ async function bootstrap() {
     const server = app.instance.listen(env.port, () => {
       console.log(`Server running on port ${env.port} in ${env.nodeEnv} mode`);
     });
+
+    // Expire pending partner transactions whose dynamic virtual account has passed its TTL
+    const expirationService = new PartnerExpirationService(
+      new PartnerTransactionRepository(PartnerTransaction),
+      "0 * * * *"
+    );
+    expirationService.start();
 
     const shutdown = (signal: string) => {
       console.log(`\n${signal} received. Shutting down gracefully...`);

@@ -36,6 +36,8 @@ export interface IPaymentMetadata {
   previousBalance?: number;
   newBalance?: number;
 
+  amount?: string;
+
   eventType?: string;
 }
 
@@ -55,6 +57,7 @@ export interface IPartnerTransaction extends Document {
   metadata?: IPaymentMetadata;
 
   settledAt?: Date;
+  expiresAt?: Date;
 
   createdAt: Date;
   updatedAt: Date;
@@ -81,6 +84,8 @@ const paymentMetadataSchema = new Schema<IPaymentMetadata>(
 
     previousBalance: { type: Number },
     newBalance: { type: Number },
+
+    amount: { type: String },
 
     eventType: { type: String },
   },
@@ -146,6 +151,10 @@ const partnerTransactionSchema = new Schema<IPartnerTransaction>(
     },
 
     settledAt: {
+      type: Date,
+    },
+
+    expiresAt: {
       type: Date,
     },
   },

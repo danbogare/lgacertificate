@@ -2,6 +2,7 @@ import { Router } from "express";
 import { IPartnerController } from "../controllers/partner.controller";
 import { IAuthMiddleware } from "../middlewares/auth.middleware";
 import { IWebhookMiddleware } from "../middlewares/webhook.middleware";
+import { partnerIpWhitelist } from "../middlewares/partner-ip-whitelist.middleware";
 import { asyncHandler } from "../middlewares/async-handler.middleware";
 
 // Mounted at /api/v1/partner
@@ -24,6 +25,7 @@ export class PartnerRouter {
     this.router.post(
       "/webhook",
       this.webhookMiddleware.verifyPartnerSignature,
+      partnerIpWhitelist,
       asyncHandler(this.partnerController.handleWebhookEvent)
     );
     this.router.post(

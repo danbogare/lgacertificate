@@ -8,6 +8,9 @@ import { asyncHandler } from "../middlewares/async-handler.middleware";
 import { loginSchema, resetPasswordSchema } from "../validators/auth.validator";
 import { changePasswordSchema, createAdminSchema, rejectionReasonSchema } from "../validators/admin.validator";
 import { emailSchema, resendOtpSchema } from "../validators/common.validator";
+import { createRateLimiter } from "../middlewares/rate-limit.middleware";
+
+const adminAuthRateLimiter = createRateLimiter({ windowMs: 15 * 60_000, max: 30, message: "Too many authentication requests. Please try again in 15 minutes." });
 
 // Mounted at /api/v1/admin
 export class AdminRouter {
@@ -32,16 +35,16 @@ export class AdminRouter {
     // Super admin onboards officials
     this.router.post("/signup", requireAdmin, validate(createAdminSchema), asyncHandler(this.adminController.signup));
 
-    this.router.post("/login", validate(loginSchema), asyncHandler(this.adminController.login));
+    this.router.post("/login", adminAuthRateLimiter, validate(loginSchema), asyncHandler(this.adminController.login));
     this.router.post(
       "/change-password",
       requireAdmin,
       validate(changePasswordSchema),
       asyncHandler(this.adminController.changePassword)
     );
-    this.router.post("/forgot-password", validate(emailSchema), asyncHandler(this.adminController.forgotPassword));
-    this.router.post("/reset-password", validate(resetPasswordSchema), asyncHandler(this.adminController.resetPassword));
-    this.router.post("/resend-otp", validate(resendOtpSchema), asyncHandler(this.adminController.resendOTP));
+    this.router.post("/forgot-password", adminAuthRateLimiter, validate(emailSchema), asyncHandler(this.adminController.forgotPassword));
+    this.router.post("/reset-password", adminAuthRateLimiter, validate(resetPasswordSchema), asyncHandler(this.adminController.resetPassword));
+    this.router.post("/resend-otp", adminAuthRateLimiter, validate(resendOtpSchema), asyncHandler(this.adminController.resendOTP));
 
     this.router.post(
       "/application/:id",

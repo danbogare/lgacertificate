@@ -55,7 +55,8 @@ export class PaymentService implements IPaymentService {
     private readonly partnerTransactionRepository: IPartnerTransactionRepository,
     private readonly flutterwaveService: IFlutterwaveService,
     private readonly partnerPaymentService: IPartnerPaymentService,
-    private readonly cryptoService: ICryptoService
+    private readonly cryptoService: ICryptoService,
+    private readonly accountTtlMinutes: number
   ) {}
 
   public async startFlutterwaveCheckout(checkout: IFlutterwaveCheckout): Promise<IFlutterwaveCheckoutResult> {
@@ -104,7 +105,13 @@ export class PaymentService implements IPaymentService {
     session?: ClientSession
   ): Promise<IPartnerTransaction> {
     return await this.partnerTransactionRepository.create(
-      { ...data, type: PaymentType.CAPTURE, status: PaymentStatus.PENDING, method: PaymentMethod.BANK_TRANSFER },
+      {
+        ...data,
+        type: PaymentType.CAPTURE,
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.BANK_TRANSFER,
+        expiresAt: new Date(Date.now() + this.accountTtlMinutes * 60 * 1000),
+      },
       session
     );
   }
